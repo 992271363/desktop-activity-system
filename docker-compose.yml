@@ -1,9 +1,46 @@
 version: '3.8'
 services:
-  backend:
+  # --- 数据库服务定义 ---
+  database:
+    image: mariadb:10.6
+    container_name: my-project-db # 给容器起固定的名字
+    restart: always # 如果容器挂了，Docker会自动重启它
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD} # 设置root用户的密码
+      MARIADB_DATABASE: ${DB_DATABASE} # 创建一个数据库
+      MARIADB_USER: ${DB_USER}  # FastAPI使用的用户
+      MARIADB_PASSWORD: ${DB_PASSWORD}  # 用户的密码
+    volumes:
+      - mariadb_data:/var/lib/mysql 
+    ports:
+      # 使用3307是为了避免宿主机冲突。
+      # 端口主要用于开发时从外部连接数据库进行调试，在服务内部通信时用不到。
+      - "3307:3306" 
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${DB_USER}", "-p${DB_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend-api:  
     build:
       context: ./backend/api
+    container_name: my-project-backend-api
+    environment:
+    DATABASE_HOSTNAME: database  #使用服务名'database'作为主机名
+    DATABASE_USER: ${DB_USER}
+    DATABASE_PASSWORD: ${DB_PASSWORD}
+    DATABASE_NAME: ${DB_DATABASE}
+    DATABASE_PORT: 3306 #容器间通信使用内部端口3306
     ports:
       - "8000:8000"
     volumes:
-      - ./backend/api/app:/code/app
+      - ./backend/api:/code 
+    depends_on:
+      database:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  mariadb_data:
+    driver: local
