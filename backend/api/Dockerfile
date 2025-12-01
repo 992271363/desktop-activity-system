@@ -7,6 +7,9 @@ WORKDIR /app
 #复制依赖文件
 COPY requirements.txt .
 
+#设置pip源
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
 #安装项目所需依赖
 RUN pip install --no-cache-dir -r requirements.txt
 
