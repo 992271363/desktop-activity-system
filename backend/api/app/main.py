@@ -2,8 +2,8 @@ from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from typing import List
 
-from . import models, schemas
-from .database import engine, get_db
+import models, schemas
+from database import engine, get_db
 
 
 #    这行代码是关键：它会找到 models.py 中所有继承了 Base 的类，
