@@ -1,5 +1,3 @@
-# sync_service.py (请确认你的文件与此完全一致)
-
 from PySide6.QtCore import QObject, Signal, QTimer
 from sqlalchemy.orm import joinedload, Session
 from local_database import SessionLocal
@@ -12,22 +10,28 @@ def get_and_prepare_sync_data():
         activities_to_sync = db.query(FocusActivity).options(
             joinedload(FocusActivity.session)
         ).filter(FocusActivity.synced == False).all()
-
         if not activities_to_sync:
             return [], []
-
-        unique_sessions = {activity.session_id: activity.session for activity in activities_to_sync}
-        data_to_send = [
-            {
-                "executable_name": session.process_name,
-                "start_time": session.session_start_time.isoformat(),
-                "end_time": session.session_end_time.isoformat(),
-                "total_focus_seconds": session.total_focus_seconds
-            }
-            for session in unique_sessions.values()
-        ]
+        sessions_map = {}
+        for activity in activities_to_sync:
+            session_id = activity.session_id
+            if session_id not in sessions_map:
+                sessions_map[session_id] = {
+                    "process_name": activity.session.process_name,
+                    "session_start_time": activity.session.session_start_time.isoformat(),
+                    "session_end_time": activity.session.session_end_time.isoformat(),
+                    "total_lifetime_seconds": activity.session.total_focus_seconds,
+                    "activities": []
+                }
+            
+            sessions_map[session_id]["activities"].append({
+                "window_title": activity.window_title,
+                "focus_duration_seconds": activity.focus_duration_seconds
+            })
+            
+        data_to_send = list(sessions_map.values())
         
-        print(f"[Sync Util] 发现 {len(unique_sessions)} 个会话包含未同步数据，准备上传...")
+        print(f"[Sync Util] 发现 {len(data_to_send)} 个会话包含未同步数据，准备上传...")
         return data_to_send, activities_to_sync
     finally:
         db.close()

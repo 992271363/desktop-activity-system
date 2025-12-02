@@ -211,5 +211,6 @@ __marimo__/
 *test.txt
 *text.http
 *text
+
 #database
 *.db
