@@ -34,40 +34,43 @@ def sync_sessions_from_client(
     current_user: models.User = Depends(auth.get_current_user)
 ):
     """
-    接收来自客户端的、完整的会话数据，并将其分解、存入数据库，
-    同时与当前登录用户关联。
+    接收来自客户端的、具有层级结构的会话数据，
+    并在服务器端完整地重建这个结构，然后存入数据库。
     """
-    new_logs_count = 0
-    created_db_records = []
-    # 1. 遍历客户端发来的每一个“进程会话” (ProcessSession)
-    for session in sessions_data:
-        # 2. 在每个会话中，遍历其中的每一个“焦点活动” (FocusActivity)
-        for activity in session.activities:
-            # 注意：客户端传来的数据结构和数据库模型不完全匹配。
-            # 我们需要在这里做一个转换。
-            # 一个“焦点活动”可以被视为一个独立的 ActivityLog 记录。
-            
-            # 由于我们没有每个焦点活动的精确开始/结束时间，
-            # 这里我们暂时使用整个会话的起止时间作为近似值。
-            # 这是一个可以未来优化的点。
-            new_log_entry = models.ActivityLog(
-                user_id=current_user.id,  # 关联到当前登录的用户
-                process_name=session.process_name,
-                window_title=activity.window_title,
-                start_time=session.session_start_time, # 使用会话的开始时间
-                end_time=session.session_end_time,     # 使用会话的结束时间
-                duration_seconds=activity.focus_duration_seconds # 使用该活动的精确焦点时长
+    total_sessions_created = 0
+    total_activities_created = 0
+    # 1. 遍历客户端发来的每一个“进程会话”
+    for session_dto in sessions_data:
+        # 2. 创建一个数据库会话模型 (ServerProcessSession)
+        new_db_session = models.ServerProcessSession(
+            owner=current_user,  # 直接通过关系关联用户
+            process_name=session_dto.process_name,
+            session_start_time=session_dto.session_start_time,
+            session_end_time=session_dto.session_end_time,
+            total_lifetime_seconds=session_dto.total_lifetime_seconds,
+        )
+        # 3. 遍历该会话下的每一个“焦点活动”
+        for activity_dto in session_dto.activities:
+            # 4. 创建数据库活动模型 (ServerFocusActivity)
+            new_db_activity = models.ServerFocusActivity(
+                window_title=activity_dto.window_title,
+                focus_duration_seconds=activity_dto.focus_duration_seconds
             )
-            db.add(new_log_entry)
-            created_db_records.append(new_log_entry)
-            new_logs_count += 1
-    # 3. 所有数据都添加到会话后，一次性提交到数据库
+            # 5. 【核心】将活动添加到会话的 activities 列表中
+            # SQLAlchemy 的 ORM 魔术会处理外键关联
+            new_db_session.activities.append(new_db_activity)
+            total_activities_created += 1
+        # 6. 将构建好的、包含所有子活动的完整会话对象添加到数据库会话中
+        db.add(new_db_session)
+        total_sessions_created += 1
+    # 7. 所有数据都处理完毕后，一次性提交事务
     db.commit()
-    # (可选) 刷新刚创建的记录，以获取数据库自动生成的 ID 等信息
-    for record in created_db_records:
-        db.refresh(record)
-    print(f"用户 '{current_user.username}' (ID: {current_user.id}) 成功同步了 {new_logs_count} 条活动记录。")
-    return {"message": f"成功将 {new_logs_count} 条活动记录存入数据库。"}
+    print(f"用户 '{current_user.username}' (ID: {current_user.id}) 同步完成。")
+    print(f"  -> 创建了 {total_sessions_created} 个新会话。")
+    print(f"  -> 创建了 {total_activities_created} 个新活动记录。")
+    return {
+        "message": f"成功接收并存储了 {total_sessions_created} 个会话及其包含的 {total_activities_created} 个活动。"
+    }
 
 
 #浏览器登录页面
@@ -126,25 +129,24 @@ def register_user(user_create: schemas.UserCreate, db: Session = Depends(databas
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def get_dashboard(
-    request: Request, 
+    request: Request,
     db: Session = Depends(database.get_db),
-    # 使用新的 cookie 依赖来获取用户
     current_user: Optional[models.User] = Depends(get_current_user_from_cookie)
 ):
-    """
-    保护仪表盘，如果用户未登录 (current_user 为 None)，则重定向到登录页面。
-    """
     if not current_user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
-    
-    # 如果已登录，查询该用户的数据并展示
-    activities = db.query(models.ActivityLog).filter(models.ActivityLog.user_id == current_user.id).order_by(models.ActivityLog.start_time.desc()).all()
+    # 新的查询：获取当前用户的所有“会话”，并预加载其下的“活动”
+    # order_by 对会话的开始时间进行降序排序
+    user_sessions = db.query(models.ServerProcessSession)\
+                      .filter(models.ServerProcessSession.user_id == current_user.id)\
+                      .order_by(models.ServerProcessSession.session_start_time.desc())\
+                      .all()
     
     return templates.TemplateResponse(
         "index.html", 
-        {"request": request, "activities": activities, "user": current_user}
+        # 将 user_sessions 传递给模板，而不是旧的 activities
+        {"request": request, "sessions": user_sessions, "user": current_user}
     )
-
 
 @app.post("/process-data/", response_model=List[schemas.ActivityLog])
 def create_activity_log_batch(

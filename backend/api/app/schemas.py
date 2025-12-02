@@ -13,20 +13,19 @@ class SyncProcessSession(BaseModel):
     total_lifetime_seconds: int
     activities: List[SyncFocusActivity]
 
-class ActivityLogBase(BaseModel):
-    process_name: str
-    window_title: str | None = None
-    start_time: datetime
-    end_time: datetime
-    duration_seconds: int
-
-class ActivityLogCreate(ActivityLogBase):
-    pass
-
-class ActivityLog(ActivityLogBase):
+class ServerFocusActivity(BaseModel):
     id: int
-    user_id: int 
-    
+    window_title: str
+    focus_duration_seconds: int
+    class Config:
+        from_attributes = True
+class ServerProcessSession(BaseModel):
+    id: int
+    process_name: str
+    session_start_time: datetime
+    session_end_time: datetime
+    total_lifetime_seconds: int
+    activities: List[ServerFocusActivity] = [] # 包含其下的所有活动
     class Config:
         from_attributes = True
 
