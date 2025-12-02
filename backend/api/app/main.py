@@ -1,3 +1,4 @@
+from pathlib import Path
 from fastapi import Request
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.templating import Jinja2Templates
@@ -10,7 +11,8 @@ from .database import SessionLocal, engine
 
 models.Base.metadata.create_all(bind=engine) 
 
-templates = Jinja2Templates(directory="templates")
+templates_dir = Path(__file__).parent.joinpath("templates")
+templates = Jinja2Templates(directory=templates_dir)
 
 app = FastAPI()
 
