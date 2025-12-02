@@ -209,6 +209,7 @@ __marimo__/
 #testFile
 *test.py
 *test.txt
-
+*text.http
+*text
 #database
 *.db
