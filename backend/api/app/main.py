@@ -32,7 +32,7 @@ def sync_sessions_from_client(
         return {"message": "无新数据需要同步。"}
         
     try:
-        # 开始一个数据库事务，确保所有操作要么全部成功，要么全部失败
+        # with db.begin() 会自动处理提交和回滚，是管理事务的最佳实践
         with db.begin():
             for session_dto in sessions_data:
                 # 1. 查找或创建 WatchedApplication
@@ -40,7 +40,6 @@ def sync_sessions_from_client(
                     user_id=current_user.id, 
                     executable_name=session_dto.process_name
                 ).first()
-
                 if not watched_app:
                     watched_app = models.ServerWatchedApplication(
                         owner=current_user,
@@ -48,14 +47,11 @@ def sync_sessions_from_client(
                     )
                     db.add(watched_app)
                     db.flush()
-
                 # 2. 锁定并更新或创建 AppUsageSummary
                 summary = db.query(models.ServerAppUsageSummary).filter_by(
                     application_id=watched_app.id
                 ).with_for_update().first()
-
                 current_session_focus_seconds = sum(act.focus_duration_seconds for act in session_dto.activities)
-
                 if not summary:
                     summary = models.ServerAppUsageSummary(
                         application=watched_app,
@@ -75,7 +71,6 @@ def sync_sessions_from_client(
                         summary.first_seen_at = session_dto.session_start_time
                 
                 db.flush()
-
                 # 3. 创建 ProcessSession
                 new_session = models.ServerProcessSession(
                     summary_id=summary.id,
@@ -87,7 +82,6 @@ def sync_sessions_from_client(
                 )
                 db.add(new_session)
                 db.flush()
-
                 # 4. 批量创建 FocusActivities
                 activities_to_add = []
                 for activity_data in session_dto.activities:
@@ -100,17 +94,16 @@ def sync_sessions_from_client(
                     )
                 if activities_to_add:
                     db.add_all(activities_to_add)
-
+        # 如果 with 块成功执行完毕，事务会自动提交，代码会执行到这里
         return {"message": f"成功同步了 {len(sessions_data)} 个会话。"}
-
     except Exception as e:
-        db.rollback()
+        # 如果 with 块内部发生任何异常，事务会自动回滚，然后异常被这里捕获
+        # 我们不再需要手动调用 db.rollback()
         print(f"同步过程中发生严重错误: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"同步失败: {str(e)}"
         )
-
 # 从 Cookie 中获取用户
 async def get_current_user_from_cookie(request: Request, db: Session = Depends(database.get_db)) -> Optional[models.User]:
     token = request.cookies.get("access_token")
