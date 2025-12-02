@@ -16,6 +16,7 @@ templates = Jinja2Templates(directory=templates_dir)
 
 app = FastAPI()
 
+
 async def get_current_user_from_cookie(request: Request, db: Session = Depends(database.get_db)) -> Optional[models.User]:
     token = request.cookies.get("access_token")
     if not token:
@@ -25,6 +26,29 @@ async def get_current_user_from_cookie(request: Request, db: Session = Depends(d
         return user
     except HTTPException:
         return None
+    
+@app.post("/sync/sessions/", status_code=status.HTTP_201_CREATED, tags=["Sync"])
+def sync_sessions_from_client(
+    sessions_data: List[schemas.SyncProcessSession], # 使用新的 Schema
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(auth.get_current_user) # 关键：用JWT保护
+):
+    """
+    接收来自客户端的、完整的会话数据，并与当前登录用户关联。
+    """
+    # 在这里，你可以编写将 sessions_data 存入后端数据库的逻辑。
+    # 例如，遍历 sessions_data，为 current_user 创建新的 ActivityLog 记录。
+    # 这里的逻辑可以根据你的需求来定，重点是数据已经安全地传过来了。
+    
+    print(f"用户 '{current_user.username}' (ID: {current_user.id}) 成功同步了 {len(sessions_data)} 条会话数据。")
+    
+    # 示例：打印第一条会话的第一个活动
+    if sessions_data and sessions_data[0].activities:
+        print(f"  -> 第一个会话的进程名: {sessions_data[0].process_name}")
+        print(f"  -> 第一个活动的标题: {sessions_data[0].activities[0].window_title}")
+        print(f"  -> 第一个活动的焦点时长: {sessions_data[0].activities[0].focus_duration_seconds}s")
+        
+    return {"message": f"成功接收 {len(sessions_data)} 条会话数据。"}
 
 
 #浏览器登录页面

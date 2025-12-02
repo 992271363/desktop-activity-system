@@ -22,13 +22,13 @@ class Ui_desktopActivitySystem(object):
     def setupUi(self, desktopActivitySystem):
         if not desktopActivitySystem.objectName():
             desktopActivitySystem.setObjectName(u"desktopActivitySystem")
-        desktopActivitySystem.resize(363, 181)
+        desktopActivitySystem.resize(377, 189)
         self.pushButton_procs = QPushButton(desktopActivitySystem)
         self.pushButton_procs.setObjectName(u"pushButton_procs")
-        self.pushButton_procs.setGeometry(QRect(110, 140, 131, 31))
+        self.pushButton_procs.setGeometry(QRect(10, 140, 121, 41))
         self.layoutWidget = QWidget(desktopActivitySystem)
         self.layoutWidget.setObjectName(u"layoutWidget")
-        self.layoutWidget.setGeometry(QRect(90, 20, 261, 106))
+        self.layoutWidget.setGeometry(QRect(100, 20, 261, 106))
         self.verticalLayout = QVBoxLayout(self.layoutWidget)
         self.verticalLayout.setObjectName(u"verticalLayout")
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
@@ -59,7 +59,7 @@ class Ui_desktopActivitySystem(object):
 
         self.layoutWidget1 = QWidget(desktopActivitySystem)
         self.layoutWidget1.setObjectName(u"layoutWidget1")
-        self.layoutWidget1.setGeometry(QRect(1, 20, 86, 106))
+        self.layoutWidget1.setGeometry(QRect(10, 20, 86, 106))
         self.verticalLayout_2 = QVBoxLayout(self.layoutWidget1)
         self.verticalLayout_2.setObjectName(u"verticalLayout_2")
         self.verticalLayout_2.setContentsMargins(0, 0, 0, 0)
@@ -93,6 +93,15 @@ class Ui_desktopActivitySystem(object):
 
         self.verticalLayout_2.addWidget(self.focus_time_label)
 
+        self.login_button = QPushButton(desktopActivitySystem)
+        self.login_button.setObjectName(u"login_button")
+        self.login_button.setGeometry(QRect(310, 140, 51, 41))
+        self.user_label = QLabel(desktopActivitySystem)
+        self.user_label.setObjectName(u"user_label")
+        self.user_label.setGeometry(QRect(150, 150, 31, 21))
+        self.user_show = QLabel(desktopActivitySystem)
+        self.user_show.setObjectName(u"user_show")
+        self.user_show.setGeometry(QRect(190, 150, 101, 21))
 
         self.retranslateUi(desktopActivitySystem)
 
@@ -112,5 +121,8 @@ class Ui_desktopActivitySystem(object):
         self.start_time_label.setText(QCoreApplication.translate("desktopActivitySystem", u"\u542f\u52a8\u65f6\u95f4\uff1a", None))
         self.end_time_label.setText(QCoreApplication.translate("desktopActivitySystem", u"\u7ed3\u675f\u65f6\u95f4\uff1a", None))
         self.focus_time_label.setText(QCoreApplication.translate("desktopActivitySystem", u"\u7a97\u53e3\u505c\u7559\u65f6\u957f\uff1a", None))
+        self.login_button.setText(QCoreApplication.translate("desktopActivitySystem", u"\u767b\u5f55", None))
+        self.user_label.setText(QCoreApplication.translate("desktopActivitySystem", u"\u8d26\u53f7\uff1a", None))
+        self.user_show.setText(QCoreApplication.translate("desktopActivitySystem", u"N/A", None))
     # retranslateUi
 

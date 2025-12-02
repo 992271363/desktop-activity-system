@@ -1,6 +1,17 @@
 from pydantic import BaseModel
 from datetime import datetime
+from typing import List
 
+
+class SyncFocusActivity(BaseModel):
+    window_title: str
+    focus_duration_seconds: int
+class SyncProcessSession(BaseModel):
+    process_name: str
+    session_start_time: datetime
+    session_end_time: datetime
+    total_lifetime_seconds: int
+    activities: List[SyncFocusActivity]
 
 class ActivityLogBase(BaseModel):
     process_name: str

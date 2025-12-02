@@ -10,7 +10,7 @@ load_dotenv()
 # 这让代码在没有 .env 文件的环境下也能优雅地运行（比如，用于快速本地测试）
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
 
-def send_data_to_api(data_list: List[Dict[str, Any]], endpoint: str):
+def send_data_to_api(data_list: List[Dict[str, Any]], endpoint: str, token: str):
     if not data_list:
         return False
     
@@ -18,7 +18,12 @@ def send_data_to_api(data_list: List[Dict[str, Any]], endpoint: str):
     # 使用传入的 endpoint 动态构建 URL
     api_url = f"{clean_base_url}{endpoint}"
     print(f"通信模块: 准备发送 {len(data_list)} 条数据到 {api_url}...")
-
+    headers = {
+        "Content-Type": "application/json"
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}" # 如果有token，就加入header
+        print("通信模块: 本次请求已携带认证Token。")
     try:
         response = requests.post(api_url, json=data_list, timeout=15) # 增加超时时间
 
@@ -28,12 +33,13 @@ def send_data_to_api(data_list: List[Dict[str, Any]], endpoint: str):
         return True
 
     except requests.exceptions.HTTPError as e:
-        # 更具体地捕获HTTP错误
-        print(f"通信模块: 数据发送失败！服务器返回错误。状态码: {e.response.status_code}")
-        print("错误详情:", e.response.text)
+        if e.response.status_code == 401: # 专门处理认证失败
+            print("通信模块: 数据发送失败！认证失败 (401)。Token可能已过期或无效。")
+        else:
+            print(f"通信模块: 数据发送失败！服务器返回错误。状态码: {e.response.status_code}")
+            print("错误详情:", e.response.text)
         return False
     except requests.exceptions.RequestException as e:
-        # 捕获所有其他网络相关的异常
         print(f"通信模块: 发生网络错误，无法连接到服务器。错误: {e}")
-        return False
+        return False    
 

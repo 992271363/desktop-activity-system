@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>363</width>
-    <height>181</height>
+    <width>377</width>
+    <height>189</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -16,10 +16,10 @@
   <widget class="QPushButton" name="pushButton_procs">
    <property name="geometry">
     <rect>
-     <x>110</x>
+     <x>10</x>
      <y>140</y>
-     <width>131</width>
-     <height>31</height>
+     <width>121</width>
+     <height>41</height>
     </rect>
    </property>
    <property name="text">
@@ -29,7 +29,7 @@
   <widget class="QWidget" name="layoutWidget">
    <property name="geometry">
     <rect>
-     <x>90</x>
+     <x>100</x>
      <y>20</y>
      <width>261</width>
      <height>106</height>
@@ -76,7 +76,7 @@
   <widget class="QWidget" name="layoutWidget">
    <property name="geometry">
     <rect>
-     <x>1</x>
+     <x>10</x>
      <y>20</y>
      <width>86</width>
      <height>106</height>
@@ -134,6 +134,45 @@
      </widget>
     </item>
    </layout>
+  </widget>
+  <widget class="QPushButton" name="login_button">
+   <property name="geometry">
+    <rect>
+     <x>310</x>
+     <y>140</y>
+     <width>51</width>
+     <height>41</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>登录</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="user_label">
+   <property name="geometry">
+    <rect>
+     <x>150</x>
+     <y>150</y>
+     <width>31</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>账号：</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="user_show">
+   <property name="geometry">
+    <rect>
+     <x>190</x>
+     <y>150</y>
+     <width>101</width>
+     <height>21</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>N/A</string>
+   </property>
   </widget>
  </widget>
  <resources/>

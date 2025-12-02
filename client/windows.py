@@ -13,6 +13,9 @@ class Mywindow(QMainWindow,Ui_desktopActivitySystem):
     def __init__(self):
         super().__init__()  
         self.setupUi(self)
+
+        self.jwt_token = None #存放token
+        
         self.proc_pid = None
         self.current_executable_name = None 
         self.current_proc_start_time = None
