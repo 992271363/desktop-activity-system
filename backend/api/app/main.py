@@ -5,7 +5,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
-from . import models, schemas, auth, database,get_db
+from . import models, schemas, auth, database
 
 
 models.Base.metadata.create_all(bind=database.engine) 
