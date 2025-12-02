@@ -29,26 +29,45 @@ async def get_current_user_from_cookie(request: Request, db: Session = Depends(d
     
 @app.post("/sync/sessions/", status_code=status.HTTP_201_CREATED, tags=["Sync"])
 def sync_sessions_from_client(
-    sessions_data: List[schemas.SyncProcessSession], # 使用新的 Schema
+    sessions_data: List[schemas.SyncProcessSession],
     db: Session = Depends(database.get_db),
-    current_user: models.User = Depends(auth.get_current_user) # 关键：用JWT保护
+    current_user: models.User = Depends(auth.get_current_user)
 ):
     """
-    接收来自客户端的、完整的会话数据，并与当前登录用户关联。
+    接收来自客户端的、完整的会话数据，并将其分解、存入数据库，
+    同时与当前登录用户关联。
     """
-    # 在这里，你可以编写将 sessions_data 存入后端数据库的逻辑。
-    # 例如，遍历 sessions_data，为 current_user 创建新的 ActivityLog 记录。
-    # 这里的逻辑可以根据你的需求来定，重点是数据已经安全地传过来了。
-    
-    print(f"用户 '{current_user.username}' (ID: {current_user.id}) 成功同步了 {len(sessions_data)} 条会话数据。")
-    
-    # 示例：打印第一条会话的第一个活动
-    if sessions_data and sessions_data[0].activities:
-        print(f"  -> 第一个会话的进程名: {sessions_data[0].process_name}")
-        print(f"  -> 第一个活动的标题: {sessions_data[0].activities[0].window_title}")
-        print(f"  -> 第一个活动的焦点时长: {sessions_data[0].activities[0].focus_duration_seconds}s")
-        
-    return {"message": f"成功接收 {len(sessions_data)} 条会话数据。"}
+    new_logs_count = 0
+    created_db_records = []
+    # 1. 遍历客户端发来的每一个“进程会话” (ProcessSession)
+    for session in sessions_data:
+        # 2. 在每个会话中，遍历其中的每一个“焦点活动” (FocusActivity)
+        for activity in session.activities:
+            # 注意：客户端传来的数据结构和数据库模型不完全匹配。
+            # 我们需要在这里做一个转换。
+            # 一个“焦点活动”可以被视为一个独立的 ActivityLog 记录。
+            
+            # 由于我们没有每个焦点活动的精确开始/结束时间，
+            # 这里我们暂时使用整个会话的起止时间作为近似值。
+            # 这是一个可以未来优化的点。
+            new_log_entry = models.ActivityLog(
+                user_id=current_user.id,  # 关联到当前登录的用户
+                process_name=session.process_name,
+                window_title=activity.window_title,
+                start_time=session.session_start_time, # 使用会话的开始时间
+                end_time=session.session_end_time,     # 使用会话的结束时间
+                duration_seconds=activity.focus_duration_seconds # 使用该活动的精确焦点时长
+            )
+            db.add(new_log_entry)
+            created_db_records.append(new_log_entry)
+            new_logs_count += 1
+    # 3. 所有数据都添加到会话后，一次性提交到数据库
+    db.commit()
+    # (可选) 刷新刚创建的记录，以获取数据库自动生成的 ID 等信息
+    for record in created_db_records:
+        db.refresh(record)
+    print(f"用户 '{current_user.username}' (ID: {current_user.id}) 成功同步了 {new_logs_count} 条活动记录。")
+    return {"message": f"成功将 {new_logs_count} 条活动记录存入数据库。"}
 
 
 #浏览器登录页面
