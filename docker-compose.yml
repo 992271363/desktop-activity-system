@@ -27,11 +27,11 @@ services:
       context: ./backend/api
     container_name: my-project-backend-api
     environment:
-    DATABASE_HOSTNAME: database  #使用服务名'database'作为主机名
-    DATABASE_USER: ${DB_USER}
-    DATABASE_PASSWORD: ${DB_PASSWORD}
-    DATABASE_NAME: ${DB_DATABASE}
-    DATABASE_PORT: 3306 #容器间通信使用内部端口3306
+      DATABASE_HOSTNAME: database  #使用服务名'database'作为主机名
+      DATABASE_USER: ${DB_USER}
+      DATABASE_PASSWORD: ${DB_PASSWORD}
+      DATABASE_NAME: ${DB_DATABASE}
+      DATABASE_PORT: 3306 #容器间通信使用内部端口3306
     ports:
       - "8000:8000"
     volumes:
