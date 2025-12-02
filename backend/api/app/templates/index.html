@@ -28,11 +28,8 @@
             </tr>
         </thead>
         <tbody>
-            <!-- 这里是Jinja2的魔力！ -->
-            <!-- 我们用一个 for 循环遍历后端传递过来的 "activities" 列表 -->
             {% for activity in activities %}
             <tr>
-                <!-- 使用 {{ a.b }} 语法来访问每个 activity 对象的属性 -->
                 <td>{{ activity.process_name }}</td>
                 <td>{{ activity.window_title }}</td>
                 <td>{{ activity.start_time.strftime('%Y-%m-%d %H:%M:%S') }}</td>
