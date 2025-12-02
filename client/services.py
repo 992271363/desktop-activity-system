@@ -151,7 +151,7 @@ class ApiSyncWorker(QObject):
                             "start_time": log.start_time.isoformat(),
                             "end_time": log.end_time.isoformat(),
                             "duration_seconds": log.duration_seconds,
-                            "user_id": 0 # 暂时硬编码为0，未来可以关联真实用户
+                            "user_id": 1 # 将 0 改为 1 (或其他真实存在的用户ID)
                         } for log in unsynced_logs
                     ]
                     

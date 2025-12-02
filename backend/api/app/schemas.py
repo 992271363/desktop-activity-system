@@ -29,4 +29,4 @@ class User(UserBase):
     logs: List[ActivityLog] = [] # 读取一个用户时，也带上他的日志
 
     class Config:
-        orm_mode = True # 在Pydantic V2中应为 from_attributes = True
+        from_attributes = True

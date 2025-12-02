@@ -2,3 +2,4 @@ uvicorn[standard]
 fastapi
 sqlalchemy
 PyMySQL
+jinja2

@@ -1,4 +1,7 @@
+from fastapi import Request
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from typing import List
 import models, schemas 
@@ -6,6 +9,8 @@ from database import SessionLocal, engine
 
 
 models.Base.metadata.create_all(bind=engine) 
+
+templates = Jinja2Templates(directory="templates")
 
 app = FastAPI()
 
@@ -15,6 +20,20 @@ def get_db():
         yield db
     finally:
         db.close()
+@app.get("/dashboard", response_class=HTMLResponse)
+def get_dashboard(request: Request, db: Session = Depends(get_db)):
+    """
+    这个函数将作为仪表盘的主页。
+    它会从数据库查询数据，然后渲染一个HTML页面来展示它们。
+    """
+
+    activities = db.query(models.ActivityLog).order_by(models.ActivityLog.start_time.desc()).all()
+    
+    return templates.TemplateResponse(
+        "index.html", 
+        {"request": request, "activities": activities}
+    )
+
 
 @app.post("/process-data/", response_model=List[schemas.ActivityLog])
 def create_activity_log_batch(

@@ -14,6 +14,8 @@ def send_data_to_api(data_list: List[Dict[str, Any]]):
     if not data_list:
         # ...
         return False
+    # 去掉 URL 末尾的斜杠
+    clean_base_url = API_BASE_URL.rstrip('/')
     # 这里会使用我们从环境变量加载的 API_BASE_URL
     api_url = f"{API_BASE_URL}/process-data/"
 
