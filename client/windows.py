@@ -73,7 +73,7 @@ class Mywindow(QMainWindow, Ui_desktopActivitySystem):
         self.sync_thread = QThread(self)
         self.sync_worker = ApiSyncWorker(parent_window=self)
         self.sync_worker.moveToThread(self.sync_thread)
-        
+        self.sync_thread.finished.connect(self.sync_worker.deleteLater)
         self.sync_thread.started.connect(self.sync_worker.start_service)
         self.request_stop_sync.connect(self.sync_worker.stop)
         
