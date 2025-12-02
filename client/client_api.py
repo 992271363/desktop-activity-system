@@ -1,45 +1,77 @@
+import os
 import requests
-import os  
-from dotenv import load_dotenv  #导入load_dotenv函数
-from typing import List, Dict, Any
-# 在代码文件加载时，立即执行 load_dotenv()
-# 它会自动查找并加载当前目录或父目录下的 .env 文件
-load_dotenv() 
-# 从环境变量中读取 API 地址
-# os.getenv 的第二个参数是“默认值”，如果环境变量里没有定义，就会使用这个默认值
-# 这让代码在没有 .env 文件的环境下也能优雅地运行（比如，用于快速本地测试）
+from dotenv import load_dotenv
+from typing import List, Dict, Any, Optional, Tuple
+from enum import Enum
+
+load_dotenv()
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
 
-def send_data_to_api(data_list: List[Dict[str, Any]], endpoint: str, token: str):
-    if not data_list:
-        return False
-    
+#定义一个清晰的登录状态枚举
+class LoginStatus(Enum):
+    SUCCESS = 0
+    INVALID_CREDENTIALS = 1 # 用户名或密码无效
+    NETWORK_ERROR = 2       # 网络问题，如无法连接、超时
+    UNKNOWN_ERROR = 3       # 其他未知错误
+
+def api_login(username: str, password: str) -> Tuple[LoginStatus, Optional[str]]:
+    """
+    调用后端接口进行登录，并返回详细的状态。
+
+    Returns:
+        一个元组 (LoginStatus, token)，其中 token 只在成功时有效。
+    """
     clean_base_url = API_BASE_URL.rstrip('/')
-    # 使用传入的 endpoint 动态构建 URL
-    api_url = f"{clean_base_url}{endpoint}"
-    print(f"通信模块: 准备发送 {len(data_list)} 条数据到 {api_url}...")
-    headers = {
-        "Content-Type": "application/json"
-    }
-    if token:
-        headers["Authorization"] = f"Bearer {token}" # 如果有token，就加入header
-        print("通信模块: 本次请求已携带认证Token。")
+    login_url = f"{clean_base_url}/auth/token"
+
     try:
-        response = requests.post(api_url, json=data_list, timeout=15) # 增加超时时间
+        response = requests.post(
+            login_url,
+            data={"username": username, "password": password},
+            timeout=10
+        )
+        # 检查是否为 HTTP 错误 (4xx, 5xx)
+        response.raise_for_status() 
 
-        response.raise_for_status()
+        access_token = response.json().get("access_token")
+        if access_token:
+            return (LoginStatus.SUCCESS, access_token)
+        else:
+            # 成功响应但没有 token，视为未知错误
+            print(f"登录API响应成功，但响应体中缺少 'access_token': {response.text}")
+            return (LoginStatus.UNKNOWN_ERROR, None)
 
-        print("通信模块: 数据发送成功！")
+    #异常处理逻辑
+    except requests.exceptions.HTTPError as e:
+        # 特别处理 HTTP 错误
+        # FastAPI 在用户名密码错误时，默认返回 400 Bad Request
+        if e.response.status_code == 400 or e.response.status_code == 401:
+            # 这是明确的凭证错误
+            return (LoginStatus.INVALID_CREDENTIALS, None)
+        else:
+            # 其他 HTTP 错误（如 404, 500）也归为网络或服务器问题
+            print(f"登录API请求失败，HTTP 错误: {e}")
+            return (LoginStatus.NETWORK_ERROR, None)
+            
+    except requests.exceptions.RequestException as e:
+        # 处理所有其他网络相关的异常 (连接超时, DNS错误, 连接被拒绝等)
+        print(f"登录API请求失败，底层网络错误: {e}")
+        return (LoginStatus.NETWORK_ERROR, None)
+
+# (send_data_to_api 函数保持不变)
+def send_data_to_api(data_list: List[Dict[str, Any]], endpoint: str, token: str) -> bool:
+    if not data_list:
         return True
 
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 401: # 专门处理认证失败
-            print("通信模块: 数据发送失败！认证失败 (401)。Token可能已过期或无效。")
-        else:
-            print(f"通信模块: 数据发送失败！服务器返回错误。状态码: {e.response.status_code}")
-            print("错误详情:", e.response.text)
-        return False
-    except requests.exceptions.RequestException as e:
-        print(f"通信模块: 发生网络错误，无法连接到服务器。错误: {e}")
-        return False    
+    clean_base_url = API_BASE_URL.rstrip('/')
+    target_url = f"{clean_base_url}/{endpoint.lstrip('/')}"
+    headers = {"Authorization": f"Bearer {token}"}
 
+    try:
+        response = requests.post(target_url, json=data_list, headers=headers, timeout=15)
+        response.raise_for_status()
+        print(f"成功发送 {len(data_list)} 条数据到 {endpoint}")
+        return True
+    except requests.exceptions.RequestException as e:
+        print(f"发送数据到 {endpoint} 失败: {e}")
+        return False

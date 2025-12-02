@@ -23,16 +23,19 @@ class Ui_LoginLog(object):
     def setupUi(self, LoginLog):
         if not LoginLog.objectName():
             LoginLog.setObjectName(u"LoginLog")
-        LoginLog.resize(261, 127)
+        LoginLog.resize(296, 168)
         self.login_reject = QPushButton(LoginLog)
         self.login_reject.setObjectName(u"login_reject")
-        self.login_reject.setGeometry(QRect(131, 80, 75, 24))
+        self.login_reject.setGeometry(QRect(151, 90, 75, 24))
         self.login_accept = QPushButton(LoginLog)
         self.login_accept.setObjectName(u"login_accept")
-        self.login_accept.setGeometry(QRect(50, 80, 75, 24))
+        self.login_accept.setGeometry(QRect(70, 90, 75, 24))
+        self.tips_label = QLabel(LoginLog)
+        self.tips_label.setObjectName(u"tips_label")
+        self.tips_label.setGeometry(QRect(30, 130, 241, 16))
         self.widget = QWidget(LoginLog)
         self.widget.setObjectName(u"widget")
-        self.widget.setGeometry(QRect(33, 22, 199, 52))
+        self.widget.setGeometry(QRect(33, 22, 231, 52))
         self.horizontalLayout = QHBoxLayout(self.widget)
         self.horizontalLayout.setObjectName(u"horizontalLayout")
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
@@ -60,6 +63,7 @@ class Ui_LoginLog(object):
 
         self.pass_input = QLineEdit(self.widget)
         self.pass_input.setObjectName(u"pass_input")
+        self.pass_input.setEchoMode(QLineEdit.Password)
 
         self.verticalLayout_2.addWidget(self.pass_input)
 
@@ -76,7 +80,9 @@ class Ui_LoginLog(object):
         LoginLog.setWindowTitle(QCoreApplication.translate("LoginLog", u"Dialog", None))
         self.login_reject.setText(QCoreApplication.translate("LoginLog", u"\u53d6\u6d88", None))
         self.login_accept.setText(QCoreApplication.translate("LoginLog", u"\u786e\u8ba4", None))
+        self.tips_label.setText("")
         self.user_label.setText(QCoreApplication.translate("LoginLog", u"\u8d26\u53f7\uff1a", None))
         self.pass_label.setText(QCoreApplication.translate("LoginLog", u"\u5bc6\u7801\uff1a", None))
+        self.pass_input.setText("")
     # retranslateUi
 

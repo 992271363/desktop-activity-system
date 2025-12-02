@@ -1,40 +1,118 @@
-import psutil, datetime, time
-from PySide6.QtCore import Qt, QObject, Signal, QThread
-from PySide6.QtWidgets import (QApplication, QMainWindow, QDialog,QTableWidgetItem,
+# windows.py (最终修正版：强制队列连接)
+
+import psutil
+import datetime
+from PySide6.QtCore import Qt, QThread, Signal # <--- 确认 Qt 被导入
+from PySide6.QtWidgets import (QApplication, QMainWindow, QDialog, QTableWidgetItem,
                                QHeaderView, QAbstractItemView)
-from services import (ProcessMonitorWorker,  FocusTimeWorker,
-                      get_process_list)
-from tracking_service import add_or_get_watched_app, record_process_session 
-from local_database import SessionLocal 
+
+from services import ProcessMonitorWorker, FocusTimeWorker, get_process_list
+from tracking_service import add_or_get_watched_app, record_process_session
+from local_database import SessionLocal
 from Ui_PidSelect import Ui_desktopActivitySystem
 from Ui_ProcListDialog import Ui_ProcList
+from login_dialog import LoginDialog
+from sync_service import ApiSyncWorker, get_and_prepare_sync_data, mark_activities_as_synced
+from client_api import send_data_to_api
 
-class Mywindow(QMainWindow,Ui_desktopActivitySystem):
+class Mywindow(QMainWindow, Ui_desktopActivitySystem):
+    request_stop_monitor = Signal()
+    request_stop_focus = Signal()
+    request_stop_sync = Signal()
+    
     def __init__(self):
-        super().__init__()  
+        super().__init__()
         self.setupUi(self)
-
-        self.jwt_token = None #存放token
         
+        self.token = None
+        self.username = None
         self.proc_pid = None
-        self.current_executable_name = None 
+        self.current_executable_name = None
         self.current_proc_start_time = None
-        
-        # 这些线程和worker的引用是好的实践
-        self.monitor_thread = None 
+        self.monitor_thread = None
         self.monitor_worker = None
-        # self.sync_thread = None # 暂时禁用
-        # self.sync_worker = None # 暂时禁用
-        self.focus_thread = None 
+        self.focus_thread = None
         self.focus_worker = None
+        self.sync_thread = None
+        self.sync_worker = None
+
+        self._setup_ui_and_connections()
+        self.start_api_sync_service()
+
+    def _setup_ui_and_connections(self):
+        self.login_button.clicked.connect(self.open_login_dialog)
         self.pushButton_procs.clicked.connect(self.open_process_dialog)
-        self.proc_name_show.setText("尚未选择进程") 
-        self.proc_path_show.setText("尚未选择进程") 
+        self.user_show.setText("未登录")
+        self.proc_name_show.setText("尚未选择进程")
+        self.proc_path_show.setText("尚未选择进程")
         self.proc_start_time_show.setText("尚未选择进程")
         self.proc_end_time_show.setText("尚未选择进程")
         self.label_focus_time_show.setText(" 0 秒")
+        self.statusBar().showMessage("欢迎使用桌面活动追踪系统", 5000)
+
+    # 这是一个新的槽函数，专门用来安全地更新状态栏
+    def update_status_bar(self, msg: str):
+        self.statusBar().showMessage(msg, 5000)
+
+    def open_login_dialog(self):
+        dialog = LoginDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            self.token = dialog.token
+            self.username = dialog.username
+            self.user_show.setText(self.username)
+            print(f"登录成功！欢迎, {self.username}。")
+            self.run_immediate_sync()
+        else:
+            print("用户取消了登录，程序将以离线模式继续运行。")
+            
+    def start_api_sync_service(self):
+        if self.sync_thread and self.sync_thread.isRunning():
+            return
+            
+        print("[Sync Manager] 正在启动后台自动同步服务...")
+        self.sync_thread = QThread(self)
+        self.sync_worker = ApiSyncWorker(parent_window=self)
+        self.sync_worker.moveToThread(self.sync_thread)
         
-        # self.start_api_sync_service() # <-- 暂时禁用同步服务
+        self.sync_thread.started.connect(self.sync_worker.start_service)
+        self.request_stop_sync.connect(self.sync_worker.stop)
+        
+        self.sync_worker.finished.connect(self.sync_thread.quit)
+        self.sync_worker.finished.connect(self.sync_worker.deleteLater)
+        self.sync_thread.finished.connect(self.sync_thread.deleteLater)
+        
+        # --- 这是本次唯一的、核心的修改！ ---
+        # 我们不再使用 lambda，而是连接到一个专用的槽函数，
+        # 并且强制指定连接模式为 Qt.QueuedConnection。
+        self.sync_worker.status_updated.connect(self.update_status_bar, Qt.QueuedConnection)
+        
+        self.sync_thread.start()
+
+    # (从这里往下的所有其他代码都与上一版完全相同，无需关注)
+    
+    def run_immediate_sync(self):
+        if not self.token:
+            print("[Immediate Sync] 未登录，跳过立即同步。")
+            return
+
+        print("[Immediate Sync] 响应关键事件，开始立即同步...")
+        self.statusBar().showMessage("正在同步数据到云端...", 3000)
+        data_to_send, activities_to_mark = get_and_prepare_sync_data()
+
+        if not data_to_send:
+            print("[Immediate Sync] 没有需要立即同步的新数据。")
+            self.statusBar().showMessage("数据已是最新。", 3000)
+            return
+
+        success = send_data_to_api(data_to_send, "/sync/sessions/", self.token)
+        if success:
+            mark_activities_as_synced(activities_to_mark)
+            print("[Immediate Sync] 立即同步成功。")
+            self.statusBar().showMessage("数据同步成功！", 3000)
+        else:
+            print("[Immediate Sync] 立即同步失败。数据将在后台重试。")
+            self.statusBar().showMessage("同步失败，后台将自动重试。", 3000)
+    
     def open_process_dialog(self):
         dialog = DialogWindow(self)
         if dialog.exec() == QDialog.Accepted:
@@ -46,135 +124,112 @@ class Mywindow(QMainWindow,Ui_desktopActivitySystem):
                     db = SessionLocal()
                     summary = add_or_get_watched_app(db, executable_name)
                     db.close()
-                    
                     if summary:
-                        self.statusBar().showMessage(
-                            f"'{executable_name}' 已追踪。累计运行: {summary.total_lifetime_seconds}s, "
-                            f"累计焦点: {summary.total_focus_time_seconds}s", 10000
-                        )
+                        self.statusBar().showMessage(f"'{executable_name}' 已追踪。累计运行: {summary.total_lifetime_seconds}s", 10000)
                     self.update_proc_info(selected_pid)
                     self.start_monitoring_process(pid=selected_pid, executable_name=executable_name)
-                
                 except psutil.NoSuchProcess:
                     self.statusBar().showMessage(f"错误：进程 {selected_pid} 已消失。", 5000)
                 except Exception as e:
-                    print(f"[UI Error] 处理选中进程时出错: {e}")
                     self.statusBar().showMessage(f"发生内部错误: {e}", 5000)
+
     def update_proc_info(self, pid):
         try:
             proc = psutil.Process(pid)
             self.proc_pid = pid
-            self.current_executable_name = proc.name() # 使用 executable_name 保持一致
+            self.current_executable_name = proc.name()
             self.current_proc_start_time = datetime.datetime.fromtimestamp(proc.create_time())
             self.proc_name_show.setText(proc.name())
             self.proc_path_show.setText(proc.exe())
-            create_time_str = self.current_proc_start_time.strftime("%Y年%m月%d日 %H:%M:%S")
-            self.proc_start_time_show.setText(create_time_str)
-            self.proc_end_time_show.setText("监视中...") 
+            self.proc_start_time_show.setText(self.current_proc_start_time.strftime("%Y-%m-%d %H:%M:%S"))
+            self.proc_end_time_show.setText("监视中...")
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             self.proc_name_show.setText(f"无法访问进程 {pid}")
-            self.proc_path_show.setText("N/A")
-            self.proc_start_time_show.setText("N/A")
-            self.proc_end_time_show.setText("N/A")
 
     def start_monitoring_process(self, pid: int, executable_name: str):
         if self.monitor_thread and self.monitor_thread.isRunning():
-            self.monitor_worker.stop()
+            self.request_stop_monitor.emit()
             self.monitor_thread.quit()
             self.monitor_thread.wait()
         if self.focus_thread and self.focus_thread.isRunning():
-            self.focus_worker.stop()
+            self.request_stop_focus.emit()
             self.focus_thread.quit()
             self.focus_thread.wait()
-            
+        
         self.label_focus_time_show.setText(" 0 秒")
         self.current_executable_name = executable_name
+        
         self.monitor_thread = QThread()
         self.monitor_worker = ProcessMonitorWorker(pid)
         self.monitor_worker.moveToThread(self.monitor_thread)
-        self.monitor_thread.started.connect(self.monitor_worker.run_check)
+        self.monitor_thread.started.connect(self.monitor_worker.start_monitoring)
+        self.request_stop_monitor.connect(self.monitor_worker.stop)
         self.monitor_worker.process_terminated.connect(self.on_process_terminated)
         self.monitor_worker.finished.connect(self.monitor_thread.quit)
-        self.monitor_thread.finished.connect(self.monitor_worker.deleteLater)
         self.monitor_thread.start()
+
         self.focus_thread = QThread()
-        self.focus_worker = FocusTimeWorker(pid) # 使用我们新的 FocusTimeWorker
+        self.focus_worker = FocusTimeWorker(pid)
         self.focus_worker.moveToThread(self.focus_thread)
-        self.focus_thread.started.connect(self.focus_worker.run_focus_check)
+        self.focus_thread.started.connect(self.focus_worker.start_focus_check)
+        self.request_stop_focus.connect(self.focus_worker.stop)
         self.focus_worker.time_updated.connect(self.on_focus_time_updated)
         self.focus_worker.finished.connect(self.focus_thread.quit)
-        self.focus_thread.finished.connect(self.focus_worker.deleteLater)
         self.focus_thread.start()
-    def on_focus_time_updated(self, seconds: int):
-        self.label_focus_time_show.setText(f" {seconds} 秒")
-
-
-    def closeEvent(self, event):
-        print("[Main Window] 关闭事件触发，正在清理所有后台线程...")
-        if self.monitor_thread and self.monitor_thread.isRunning():
-            self.monitor_worker.stop()
-            self.monitor_thread.quit()
-            self.monitor_thread.wait(2000)
-        if self.focus_thread and self.focus_thread.isRunning():
-            self.focus_worker.stop()
-            self.focus_thread.quit()
-            self.focus_thread.wait(2000)
-        # if self.sync_thread and self.sync_thread.isRunning(): ... # 暂时禁用
-        super().closeEvent(event)
 
     def on_process_terminated(self, pid: int, end_time: datetime.datetime):
         if self.proc_pid != pid:
             return
-        
-        # 确保焦点线程也停止
+            
         if self.focus_thread and self.focus_thread.isRunning():
-            self.focus_worker.stop()
-        
-        # 从 focus_worker 获取详细的焦点数据字典
+            self.request_stop_focus.emit()
+            self.focus_thread.wait(500)
+            
         focus_details = self.focus_worker.get_focus_details()
+        self.proc_end_time_show.setText(end_time.strftime("%Y-%m-%d %H:%M:%S"))
         
-        end_time_str = end_time.strftime("%Y年%m月%d日 %H:%M:%S")
-        self.proc_end_time_show.setText(end_time_str)
-        
-        print(f"[Manager] 进程终止，准备写入数据库。焦点详情: {focus_details}")
-        db = None
+        db = SessionLocal()
         try:
-            db = SessionLocal() 
-            # 调用新的 record_process_session 函数，并传入正确的参数
             record_process_session(
                 db=db,
                 executable_name=self.current_executable_name,
                 start_time=self.current_proc_start_time,
                 end_time=end_time,
-                focus_details=focus_details # <-- 传入字典，而不是整数！
+                focus_details=focus_details
             )
-        except Exception as e:
-            print(f"[Manager] 数据库操作时发生错误: {e}")
         finally:
-            if db:
-                db.close()
-                print("[Manager] 数据库会话已关闭。")
+            db.close()
 
-    def on_monitor_finished(self):
-        print("[Manager] 确认监视线程已结束。")
+    def on_focus_time_updated(self, seconds: int):
+        self.label_focus_time_show.setText(f" {seconds} 秒")
 
-    def on_monitor_error(self, error_message):
-        print(f"[Manager] 接到错误报告: {error_message}")
+    def closeEvent(self, event):
+        print("[Main Window] 关闭事件触发...")
+        self.run_immediate_sync()
 
-    def get_create_timestamp(self,pid):
-        proc = psutil.Process(pid)
-        create_timestamp = proc.create_time()
-        create_datetime = datetime.datetime.fromtimestamp(create_timestamp)
-        return create_datetime
+        print("--> 正在通过信号请求所有后台服务优雅停止...")
+        if self.monitor_thread and self.monitor_thread.isRunning():
+            self.request_stop_monitor.emit()
+            self.monitor_thread.quit()
+            self.monitor_thread.wait()
+        if self.focus_thread and self.focus_thread.isRunning():
+            self.request_stop_focus.emit()
+            self.focus_thread.quit()
+            self.focus_thread.wait()
+        if self.sync_thread and self.sync_thread.isRunning():
+            self.request_stop_sync.emit()
+            self.sync_thread.quit()
+            self.sync_thread.wait()
+            
+        print("[Main Window] 所有后台服务已确认停止，程序即将退出。")
+        super().closeEvent(event)
 
 class DialogWindow(QDialog, Ui_ProcList):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setupUi(self)
         self.proc_pid = None
-        self.proc_name = None
-        self.proc_path = None
-        self.list_brush.clicked.connect(self.populate_process_list) # 列表刷新按钮
+        self.list_brush.clicked.connect(self.populate_process_list) 
         header = self.procTable.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.Interactive)
@@ -196,8 +251,8 @@ class DialogWindow(QDialog, Ui_ProcList):
 
     def populate_process_list(self):
         self.procTable.setSortingEnabled(False)
-        self.procTable.setRowCount(0) # 清空旧数据
-        processes = get_process_list() # 获取新数据
+        self.procTable.setRowCount(0) 
+        processes = get_process_list() 
         self.procTable.setRowCount(len(processes))
         for row, proc_info in enumerate(processes):
             pid_item = QTableWidgetItem()
@@ -212,3 +267,4 @@ class DialogWindow(QDialog, Ui_ProcList):
             self.procTable.setItem(row, 1, name_item)
             self.procTable.setItem(row, 2, path_item)
         self.procTable.setSortingEnabled(True)
+

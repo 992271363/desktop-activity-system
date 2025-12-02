@@ -22,13 +22,13 @@ class Ui_desktopActivitySystem(object):
     def setupUi(self, desktopActivitySystem):
         if not desktopActivitySystem.objectName():
             desktopActivitySystem.setObjectName(u"desktopActivitySystem")
-        desktopActivitySystem.resize(377, 189)
+        desktopActivitySystem.resize(400, 221)
         self.pushButton_procs = QPushButton(desktopActivitySystem)
         self.pushButton_procs.setObjectName(u"pushButton_procs")
-        self.pushButton_procs.setGeometry(QRect(10, 140, 121, 41))
+        self.pushButton_procs.setGeometry(QRect(30, 140, 121, 41))
         self.layoutWidget = QWidget(desktopActivitySystem)
         self.layoutWidget.setObjectName(u"layoutWidget")
-        self.layoutWidget.setGeometry(QRect(100, 20, 261, 106))
+        self.layoutWidget.setGeometry(QRect(120, 20, 261, 106))
         self.verticalLayout = QVBoxLayout(self.layoutWidget)
         self.verticalLayout.setObjectName(u"verticalLayout")
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
@@ -59,7 +59,7 @@ class Ui_desktopActivitySystem(object):
 
         self.layoutWidget1 = QWidget(desktopActivitySystem)
         self.layoutWidget1.setObjectName(u"layoutWidget1")
-        self.layoutWidget1.setGeometry(QRect(10, 20, 86, 106))
+        self.layoutWidget1.setGeometry(QRect(30, 20, 86, 106))
         self.verticalLayout_2 = QVBoxLayout(self.layoutWidget1)
         self.verticalLayout_2.setObjectName(u"verticalLayout_2")
         self.verticalLayout_2.setContentsMargins(0, 0, 0, 0)
@@ -95,13 +95,13 @@ class Ui_desktopActivitySystem(object):
 
         self.login_button = QPushButton(desktopActivitySystem)
         self.login_button.setObjectName(u"login_button")
-        self.login_button.setGeometry(QRect(310, 140, 51, 41))
+        self.login_button.setGeometry(QRect(330, 140, 51, 41))
         self.user_label = QLabel(desktopActivitySystem)
         self.user_label.setObjectName(u"user_label")
-        self.user_label.setGeometry(QRect(150, 150, 31, 21))
+        self.user_label.setGeometry(QRect(170, 150, 31, 21))
         self.user_show = QLabel(desktopActivitySystem)
         self.user_show.setObjectName(u"user_show")
-        self.user_show.setGeometry(QRect(190, 150, 101, 21))
+        self.user_show.setGeometry(QRect(210, 150, 101, 21))
 
         self.retranslateUi(desktopActivitySystem)
 

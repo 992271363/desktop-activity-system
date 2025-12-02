@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>377</width>
-    <height>189</height>
+    <width>400</width>
+    <height>221</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -16,7 +16,7 @@
   <widget class="QPushButton" name="pushButton_procs">
    <property name="geometry">
     <rect>
-     <x>10</x>
+     <x>30</x>
      <y>140</y>
      <width>121</width>
      <height>41</height>
@@ -29,7 +29,7 @@
   <widget class="QWidget" name="layoutWidget">
    <property name="geometry">
     <rect>
-     <x>100</x>
+     <x>120</x>
      <y>20</y>
      <width>261</width>
      <height>106</height>
@@ -76,7 +76,7 @@
   <widget class="QWidget" name="layoutWidget">
    <property name="geometry">
     <rect>
-     <x>10</x>
+     <x>30</x>
      <y>20</y>
      <width>86</width>
      <height>106</height>
@@ -138,7 +138,7 @@
   <widget class="QPushButton" name="login_button">
    <property name="geometry">
     <rect>
-     <x>310</x>
+     <x>330</x>
      <y>140</y>
      <width>51</width>
      <height>41</height>
@@ -151,7 +151,7 @@
   <widget class="QLabel" name="user_label">
    <property name="geometry">
     <rect>
-     <x>150</x>
+     <x>170</x>
      <y>150</y>
      <width>31</width>
      <height>21</height>
@@ -164,7 +164,7 @@
   <widget class="QLabel" name="user_show">
    <property name="geometry">
     <rect>
-     <x>190</x>
+     <x>210</x>
      <y>150</y>
      <width>101</width>
      <height>21</height>
