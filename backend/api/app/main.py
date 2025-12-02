@@ -1,5 +1,3 @@
-# main.py (完整替换版)
-
 from pathlib import Path
 from typing import List, Optional
 from fastapi import Request, FastAPI, Depends, HTTPException, status, Response
@@ -9,7 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from . import models, schemas, auth, database
 
-# 初始化数据库表 (SQLAlchemy 会创建所有新模型对应的表)
+# 初始化数据库表
 models.Base.metadata.create_all(bind=database.engine) 
 
 # FastAPI 实例和模板配置
@@ -17,93 +15,99 @@ templates_dir = Path(__file__).parent.joinpath("templates")
 templates = Jinja2Templates(directory=templates_dir)
 app = FastAPI()
 
-# 核心 API: 智能同步接口
+# 核心 API: 智能同步接口 (采用手动事务控制)
 @app.post("/sync/sessions/", status_code=status.HTTP_201_CREATED, tags=["Sync"])
 def sync_sessions_from_client(
     sessions_data: List[schemas.SyncProcessSession],
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(auth.get_current_user)
 ):
-    """
-    接收来自客户端的会话数据，并智能地更新服务端的四层模型结构。
-    这是一个事务性操作。
-    """
     if not sessions_data:
         return {"message": "无新数据需要同步。"}
         
     try:
-        # with db.begin() 会自动处理提交和回滚，是管理事务的最佳实践
-        with db.begin():
-            for session_dto in sessions_data:
-                # 1. 查找或创建 WatchedApplication
-                watched_app = db.query(models.ServerWatchedApplication).filter_by(
-                    user_id=current_user.id, 
+        # --- 不再使用 with db.begin() ---
+        for session_dto in sessions_data:
+            # 1. 查找或创建 WatchedApplication
+            watched_app = db.query(models.ServerWatchedApplication).filter_by(
+                user_id=current_user.id, 
+                executable_name=session_dto.process_name
+            ).first()
+
+            if not watched_app:
+                watched_app = models.ServerWatchedApplication(
+                    owner=current_user,
                     executable_name=session_dto.process_name
-                ).first()
-                if not watched_app:
-                    watched_app = models.ServerWatchedApplication(
-                        owner=current_user,
-                        executable_name=session_dto.process_name
-                    )
-                    db.add(watched_app)
-                    db.flush()
-                # 2. 锁定并更新或创建 AppUsageSummary
-                summary = db.query(models.ServerAppUsageSummary).filter_by(
-                    application_id=watched_app.id
-                ).with_for_update().first()
-                current_session_focus_seconds = sum(act.focus_duration_seconds for act in session_dto.activities)
-                if not summary:
-                    summary = models.ServerAppUsageSummary(
-                        application=watched_app,
-                        first_seen_at=session_dto.session_start_time,
-                        last_seen_start_at=session_dto.session_start_time,
-                        last_seen_end_at=session_dto.session_end_time,
-                        total_lifetime_seconds=session_dto.total_lifetime_seconds,
-                        total_focus_time_seconds=current_session_focus_seconds
-                    )
-                    db.add(summary)
-                else:
-                    summary.total_lifetime_seconds += session_dto.total_lifetime_seconds
-                    summary.total_focus_time_seconds += current_session_focus_seconds
-                    summary.last_seen_start_at = session_dto.session_start_time
-                    summary.last_seen_end_at = session_dto.session_end_time
-                    if not summary.first_seen_at or summary.first_seen_at > session_dto.session_start_time:
-                        summary.first_seen_at = session_dto.session_start_time
-                
-                db.flush()
-                # 3. 创建 ProcessSession
-                new_session = models.ServerProcessSession(
-                    summary_id=summary.id,
-                    process_name=session_dto.process_name,
-                    session_start_time=session_dto.session_start_time,
-                    session_end_time=session_dto.session_end_time,
-                    total_lifetime_seconds=session_dto.total_lifetime_seconds,
-                    total_focus_seconds=current_session_focus_seconds
                 )
-                db.add(new_session)
+                db.add(watched_app)
                 db.flush()
-                # 4. 批量创建 FocusActivities
-                activities_to_add = []
-                for activity_data in session_dto.activities:
-                    activities_to_add.append(
-                        models.ServerFocusActivity(
-                            session_id=new_session.id,
-                            window_title=activity_data.window_title,
-                            focus_duration_seconds=activity_data.focus_duration_seconds
-                        )
+
+            # 2. 锁定并更新或创建 AppUsageSummary
+            summary = db.query(models.ServerAppUsageSummary).filter_by(
+                application_id=watched_app.id
+            ).with_for_update().first()
+
+            current_session_focus_seconds = sum(act.focus_duration_seconds for act in session_dto.activities)
+
+            if not summary:
+                summary = models.ServerAppUsageSummary(
+                    application=watched_app,
+                    first_seen_at=session_dto.session_start_time,
+                    last_seen_start_at=session_dto.session_start_time,
+                    last_seen_end_at=session_dto.session_end_time,
+                    total_lifetime_seconds=session_dto.total_lifetime_seconds,
+                    total_focus_time_seconds=current_session_focus_seconds
+                )
+                db.add(summary)
+            else:
+                summary.total_lifetime_seconds += session_dto.total_lifetime_seconds
+                summary.total_focus_time_seconds += current_session_focus_seconds
+                summary.last_seen_start_at = session_dto.session_start_time
+                summary.last_seen_end_at = session_dto.session_end_time
+                if not summary.first_seen_at or summary.first_seen_at > session_dto.session_start_time:
+                    summary.first_seen_at = session_dto.session_start_time
+            
+            db.flush()
+
+            # 3. 创建 ProcessSession
+            new_session = models.ServerProcessSession(
+                summary_id=summary.id,
+                process_name=session_dto.process_name,
+                session_start_time=session_dto.session_start_time,
+                session_end_time=session_dto.session_end_time,
+                total_lifetime_seconds=session_dto.total_lifetime_seconds,
+                total_focus_seconds=current_session_focus_seconds
+            )
+            db.add(new_session)
+            db.flush()
+
+            # 4. 批量创建 FocusActivities
+            activities_to_add = []
+            for activity_data in session_dto.activities:
+                activities_to_add.append(
+                    models.ServerFocusActivity(
+                        session_id=new_session.id,
+                        window_title=activity_data.window_title,
+                        focus_duration_seconds=activity_data.focus_duration_seconds
                     )
-                if activities_to_add:
-                    db.add_all(activities_to_add)
-        # 如果 with 块成功执行完毕，事务会自动提交，代码会执行到这里
+                )
+            if activities_to_add:
+                db.add_all(activities_to_add)
+        
+        # 5. 所有循环成功结束后，在 try 块的最后，手动提交整个事务
+        db.commit()
+
         return {"message": f"成功同步了 {len(sessions_data)} 个会话。"}
+
     except Exception as e:
-        # 如果 with 块内部发生任何异常，事务会自动回滚，然后异常被这里捕获
-        # 我们不再需要手动调用 db.rollback()
-        print(f"同步过程中发生严重错误: {e}")
+        # 6. 如果 try 块中的任何地方（包括 flush）发生异常，手动回滚所有更改
+        db.rollback()
+        print(f"同步过程中发生严重错误，事务已回滚: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"同步失败: {str(e)}"
+            detail=f"同步失败，服务器内部错误: {str(e)}"
         )
+
 # 从 Cookie 中获取用户
 async def get_current_user_from_cookie(request: Request, db: Session = Depends(database.get_db)) -> Optional[models.User]:
     token = request.cookies.get("access_token")
@@ -173,14 +177,12 @@ def get_dashboard(
     if not current_user:
         return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
     
-    # 新的查询逻辑：获取当前用户的“总账”记录
     summaries = db.query(models.ServerAppUsageSummary)\
                   .join(models.ServerWatchedApplication)\
                   .filter(models.ServerWatchedApplication.user_id == current_user.id)\
                   .order_by(models.ServerAppUsageSummary.total_focus_time_seconds.desc())\
                   .all()
     
-    # 顺便获取最近的会话记录
     recent_sessions = db.query(models.ServerProcessSession)\
                        .join(models.ServerAppUsageSummary)\
                        .join(models.ServerWatchedApplication)\
