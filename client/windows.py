@@ -2,7 +2,7 @@ import psutil, datetime, time
 from PySide6.QtCore import Qt, QObject, Signal, QThread
 from PySide6.QtWidgets import (QApplication, QMainWindow, QDialog,QTableWidgetItem,
                                QHeaderView, QAbstractItemView)
-from services import (ProcessMonitorWorker, ApiSyncWorker, FocusTimeWorker,
+from services import (ProcessMonitorWorker,  FocusTimeWorker,
                       get_process_list)
 from tracking_service import add_or_get_watched_app, record_process_session 
 from local_database import SessionLocal 
@@ -14,62 +14,54 @@ class Mywindow(QMainWindow,Ui_desktopActivitySystem):
         super().__init__()  
         self.setupUi(self)
         self.proc_pid = None
-        self.current_executable_name = None # 使用完整可执行文件名作为唯一标识
-        self.current_proc_start_time = None # 用于记录进程启动时间
-        self.current_focus_seconds = 0 # 用于累计当前会话的焦点时间
-        self.monitor_thread = None # 用于监控进程的线程
-        self.monitor_worker = None # 用于监控进程的工作线程
-        self.sync_thread = None # 用于同步数据的线程
-        self.sync_worker = None # 用于同步数据的工作线程
-        self.focus_thread = None # 用于计算焦点时间的线程
-        self.focus_worker = None # 用于计算焦点时间的工作线程
-
+        self.current_executable_name = None 
+        self.current_proc_start_time = None
+        
+        # 这些线程和worker的引用是好的实践
+        self.monitor_thread = None 
+        self.monitor_worker = None
+        # self.sync_thread = None # 暂时禁用
+        # self.sync_worker = None # 暂时禁用
+        self.focus_thread = None 
+        self.focus_worker = None
         self.pushButton_procs.clicked.connect(self.open_process_dialog)
         self.proc_name_show.setText("尚未选择进程") 
         self.proc_path_show.setText("尚未选择进程") 
         self.proc_start_time_show.setText("尚未选择进程")
         self.proc_end_time_show.setText("尚未选择进程")
         self.label_focus_time_show.setText(" 0 秒")
-        self.start_api_sync_service()
-
+        
+        # self.start_api_sync_service() # <-- 暂时禁用同步服务
     def open_process_dialog(self):
         dialog = DialogWindow(self)
-        try:
-            if dialog.exec() == QDialog.Accepted:
-                selected_pid = dialog.get_selected_pid()
-                if selected_pid:
-                   try:
-                       proc = psutil.Process(selected_pid)
-                       executable_name = proc.name() # 使用 proc.name() 作为唯一标识
-                       # 与数据库交互
-                       db = SessionLocal()
-                       summary = add_or_get_watched_app(db, executable_name)
-                       db.close()
-                       
-                       if summary:
-                           self.statusBar().showMessage(
-                               f"'{executable_name}' 已追踪。累计运行: {summary.total_lifetime_seconds}s, "
-                               f"累计焦点: {summary.total_focus_time_seconds}s", 10000 # 显示10秒
-                           )
-                       # 启动监视
-                       self.update_proc_info(selected_pid)
-                       self.start_monitoring_process(pid=selected_pid, executable_name=executable_name)
-                   
-                   except psutil.NoSuchProcess:
-                       self.statusBar().showMessage(f"错误：进程 {selected_pid} 已消失。", 5000)
-                   except Exception as e:
-                       print(f"[UI Error] 处理选中进程时出错: {e}")
-                       self.statusBar().showMessage(f"发生内部错误: {e}", 5000)
-                   # --- 主要修改 END ---
-        except KeyboardInterrupt:
-            print("[UI] 在打开对话框时捕获到意外的 KeyboardInterrupt，已忽略。程序将继续运行。")
-            pass
-
+        if dialog.exec() == QDialog.Accepted:
+            selected_pid = dialog.get_selected_pid()
+            if selected_pid:
+                try:
+                    proc = psutil.Process(selected_pid)
+                    executable_name = proc.name()
+                    db = SessionLocal()
+                    summary = add_or_get_watched_app(db, executable_name)
+                    db.close()
+                    
+                    if summary:
+                        self.statusBar().showMessage(
+                            f"'{executable_name}' 已追踪。累计运行: {summary.total_lifetime_seconds}s, "
+                            f"累计焦点: {summary.total_focus_time_seconds}s", 10000
+                        )
+                    self.update_proc_info(selected_pid)
+                    self.start_monitoring_process(pid=selected_pid, executable_name=executable_name)
+                
+                except psutil.NoSuchProcess:
+                    self.statusBar().showMessage(f"错误：进程 {selected_pid} 已消失。", 5000)
+                except Exception as e:
+                    print(f"[UI Error] 处理选中进程时出错: {e}")
+                    self.statusBar().showMessage(f"发生内部错误: {e}", 5000)
     def update_proc_info(self, pid):
         try:
             proc = psutil.Process(pid)
             self.proc_pid = pid
-            self.current_proc_name = proc.name() 
+            self.current_executable_name = proc.name() # 使用 executable_name 保持一致
             self.current_proc_start_time = datetime.datetime.fromtimestamp(proc.create_time())
             self.proc_name_show.setText(proc.name())
             self.proc_path_show.setText(proc.exe())
@@ -83,114 +75,75 @@ class Mywindow(QMainWindow,Ui_desktopActivitySystem):
             self.proc_end_time_show.setText("N/A")
 
     def start_monitoring_process(self, pid: int, executable_name: str):
-        # 停止旧的监控线程（如果存在）
         if self.monitor_thread and self.monitor_thread.isRunning():
             self.monitor_worker.stop()
             self.monitor_thread.quit()
             self.monitor_thread.wait()
-        # 停止旧的焦点计时线程（如果存在）
         if self.focus_thread and self.focus_thread.isRunning():
             self.focus_worker.stop()
             self.focus_thread.quit()
             self.focus_thread.wait()
             
-        # 重置UI
         self.label_focus_time_show.setText(" 0 秒")
-        self.current_focus_seconds = 0 # 重置焦点时间计数器
-        self.current_executable_name = executable_name # 保存当前监视的程序名
-
-        # 启动新的进程生命周期监控线程
+        self.current_executable_name = executable_name
         self.monitor_thread = QThread()
         self.monitor_worker = ProcessMonitorWorker(pid)
         self.monitor_worker.moveToThread(self.monitor_thread)
         self.monitor_thread.started.connect(self.monitor_worker.run_check)
         self.monitor_worker.process_terminated.connect(self.on_process_terminated)
         self.monitor_worker.finished.connect(self.monitor_thread.quit)
-        self.monitor_thread.finished.connect(self.on_monitor_finished)
         self.monitor_thread.finished.connect(self.monitor_worker.deleteLater)
         self.monitor_thread.start()
-
-        # 启动新的焦点计时线程
         self.focus_thread = QThread()
-        self.focus_worker = FocusTimeWorker(pid)
+        self.focus_worker = FocusTimeWorker(pid) # 使用我们新的 FocusTimeWorker
         self.focus_worker.moveToThread(self.focus_thread)
         self.focus_thread.started.connect(self.focus_worker.run_focus_check)
         self.focus_worker.time_updated.connect(self.on_focus_time_updated)
         self.focus_worker.finished.connect(self.focus_thread.quit)
         self.focus_thread.finished.connect(self.focus_worker.deleteLater)
         self.focus_thread.start()
-
     def on_focus_time_updated(self, seconds: int):
         self.label_focus_time_show.setText(f" {seconds} 秒")
-        self.current_focus_seconds = seconds # 持续更新当前会话的焦点总时长
-    def start_api_sync_service(self):
-        if self.sync_thread and self.sync_thread.isRunning():
-            print("[Sync Service] 服务已经在运行中，无需重复启动。")
-            return
-        self.sync_thread = QThread()
-        self.sync_worker = ApiSyncWorker(interval_seconds=15) 
-        self.sync_worker.moveToThread(self.sync_thread)
-        self.sync_thread.started.connect(self.sync_worker.run_sync)
-        self.sync_worker.finished.connect(self.sync_thread.quit)
-        self.sync_worker.status_updated.connect(self.update_status_bar)
-        self.sync_thread.finished.connect(self.sync_worker.deleteLater)
-        self.sync_thread.start()
-        print("[Sync Service] 云同步服务线程已启动。")
 
-    def update_status_bar(self, message: str):
-        print(f"[Sync Status] {message}") 
 
     def closeEvent(self, event):
-        """重写关闭事件，确保所有后台线程都安全退出"""
         print("[Main Window] 关闭事件触发，正在清理所有后台线程...")
-        
-        # 停止进程监视线程
         if self.monitor_thread and self.monitor_thread.isRunning():
-            print("  -> 正在停止进程监视线程...")
             self.monitor_worker.stop()
             self.monitor_thread.quit()
             self.monitor_thread.wait(2000)
-            print("  -> 进程监视线程已停止。")
-            
-        # 停止焦点计时线程
         if self.focus_thread and self.focus_thread.isRunning():
-            print("  -> 正在停止焦点计时线程...")
             self.focus_worker.stop()
             self.focus_thread.quit()
             self.focus_thread.wait(2000)
-            print("  -> 焦点计时线程已停止。")
-
-        # 停止云同步线程
-        if self.sync_thread and self.sync_thread.isRunning():
-            print("  -> 正在停止云同步线程...")
-            self.sync_worker.stop()
-            self.sync_thread.quit()
-            self.sync_thread.wait(2000)
-            print("  -> 云同步线程已停止。")
-            
+        # if self.sync_thread and self.sync_thread.isRunning(): ... # 暂时禁用
         super().closeEvent(event)
 
     def on_process_terminated(self, pid: int, end_time: datetime.datetime):
         if self.proc_pid != pid:
             return
         
- 
+        # 确保焦点线程也停止
         if self.focus_thread and self.focus_thread.isRunning():
             self.focus_worker.stop()
+        
+        # 从 focus_worker 获取详细的焦点数据字典
+        focus_details = self.focus_worker.get_focus_details()
         
         end_time_str = end_time.strftime("%Y年%m月%d日 %H:%M:%S")
         self.proc_end_time_show.setText(end_time_str)
         
-        print("[Manager] 进程终止，准备写入数据库...")
+        print(f"[Manager] 进程终止，准备写入数据库。焦点详情: {focus_details}")
         db = None
         try:
             db = SessionLocal() 
+            # 调用新的 record_process_session 函数，并传入正确的参数
             record_process_session(
                 db=db,
                 executable_name=self.current_executable_name,
                 start_time=self.current_proc_start_time,
                 end_time=end_time,
-                focus_seconds=self.current_focus_seconds # 传入累计的焦点时间
+                focus_details=focus_details # <-- 传入字典，而不是整数！
             )
         except Exception as e:
             print(f"[Manager] 数据库操作时发生错误: {e}")

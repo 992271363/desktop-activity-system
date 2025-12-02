@@ -32,6 +32,7 @@ services:
       DATABASE_PASSWORD: ${DB_PASSWORD}
       DATABASE_NAME: ${DB_DATABASE}
       DATABASE_PORT: 3306 #容器间通信使用内部端口3306
+      SECRET_KEY: ${SECRET_KEY}
     ports:
       - "8000:8000"
     volumes:

@@ -10,15 +10,13 @@ load_dotenv()
 # 这让代码在没有 .env 文件的环境下也能优雅地运行（比如，用于快速本地测试）
 API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
 
-def send_data_to_api(data_list: List[Dict[str, Any]]):
+def send_data_to_api(data_list: List[Dict[str, Any]], endpoint: str):
     if not data_list:
-        # ...
         return False
-    # 去掉 URL 末尾的斜杠
+    
     clean_base_url = API_BASE_URL.rstrip('/')
-    # 这里会使用我们从环境变量加载的 API_BASE_URL
-    api_url = f"{API_BASE_URL}/process-data/"
-
+    # 使用传入的 endpoint 动态构建 URL
+    api_url = f"{clean_base_url}{endpoint}"
     print(f"通信模块: 准备发送 {len(data_list)} 条数据到 {api_url}...")
 
     try:

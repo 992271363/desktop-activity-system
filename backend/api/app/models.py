@@ -4,13 +4,10 @@ from .database import Base
 
 class User(Base):
     __tablename__ = "users"
-    
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
-    
-    # relationship 会自动找到 ActivityLog 类
-    logs = relationship("ActivityLog", back_populates="user", cascade="all, delete-orphan")
+    activities = relationship("ActivityLog", back_populates="owner")
 
 class ActivityLog(Base):
     __tablename__ = "activity_logs"
@@ -26,4 +23,4 @@ class ActivityLog(Base):
     duration_seconds = Column(Integer, nullable=False)
     
     # 建立与 User 的关系
-    user = relationship("User", back_populates="logs")
+    owner = relationship("User", back_populates="activities") 

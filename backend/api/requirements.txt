@@ -3,3 +3,6 @@ fastapi
 sqlalchemy
 PyMySQL
 jinja2
+passlib[bcrypt]
+python-jose[cryptography]
+python-multipart

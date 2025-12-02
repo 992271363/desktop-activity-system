@@ -6,7 +6,6 @@ import win32gui
 import win32process
 from PySide6.QtCore import QObject, Signal
 from sqlalchemy.orm import Session
-from local_models import ActivityLog
 from client_api import send_data_to_api 
 from local_database import SessionLocal
 
@@ -119,105 +118,49 @@ def log_activity(db: Session, proc_name: str, start: datetime.datetime, end: dat
         print(f"[DB Service] 数据库写入失败: {e}")
         db.rollback()
         return None
-    
-class ApiSyncWorker(QObject):
-    """
-    一个专门负责将本地数据同步到远程API的工人。
-    """
-    status_updated = Signal(str)
-    finished = Signal()
-    def __init__(self, interval_seconds=60):
-        super().__init__()
-        self._is_running = True
-        self.interval = interval_seconds
-    def run_sync(self):
-        """
-        线程启动后循环执行这个同步任务。
-        """
-        self.status_updated.emit("云同步服务已启动...")
-        while self._is_running:
-            try:
-                self.status_updated.emit("开始检查本地数据...")
-                db = SessionLocal()
-                
-                # 1. 查询所有未同步的记录
-                unsynced_logs = db.query(ActivityLog).filter(ActivityLog.synced == False).all()
-                if not unsynced_logs:
-                    self.status_updated.emit(f"本地没有需要同步的数据，将在 {self.interval} 秒后再次检查。")
-                else:
-                    self.status_updated.emit(f"发现 {len(unsynced_logs)} 条未同步记录，准备发送...")
-                    
-                    # 2. 将 SQLAlchemy 对象转换为 API 需要的字典列表
-                    data_to_send = [
-                        {
-                            "process_name": log.process_name,
-                            "window_title": log.window_title, # 即使是None也要发送
-                            "start_time": log.start_time.isoformat(),
-                            "end_time": log.end_time.isoformat(),
-                            "duration_seconds": log.duration_seconds,
-                            "user_id": 1 # 将 0 改为 1 (或其他真实存在的用户ID)
-                        } for log in unsynced_logs
-                    ]
-                    
-                    # 3. 调用API 发送数据
-                    success = send_data_to_api(data_to_send)
-                    if success:
-                        # 4. 如果发送成功，更新本地记录的状态
-                        self.status_updated.emit("数据同步成功！正在更新本地状态...")
-                        for log in unsynced_logs:
-                            log.synced = True
-                        db.commit()
-                        self.status_updated.emit(f"本地状态更新完毕，将在 {self.interval} 秒后再次检查。")
-                    else:
-                        # 发送失败，什么都不做，下次循环会再次尝试
-                        self.status_updated.emit(f"数据同步失败，将在 {self.interval} 秒后重试。")
-                db.close()
-                
-                # 5. 等待指定时间
-                for i in range(self.interval):
-                    if not self._is_running:
-                        break
-                    time.sleep(1)
-            except Exception as e:
-                self.status_updated.emit(f"云同步服务发生严重错误: {e}")
-                time.sleep(self.interval) # 出错后也等待，避免CPU飙升
-        
-        self.status_updated.emit("云同步服务已停止。")
-        self.finished.emit()
-    def stop(self):
-        self._is_running = False
 
 # 进程焦点时间监控
 class FocusTimeWorker(QObject):
-    time_updated = Signal(int)
     finished = Signal()
-    def __init__(self, pid_to_watch: int):
+    # 这个信号仍然发送总时长，专门用于更新UI显示
+    time_updated = Signal(int)
+    def __init__(self, pid: int):
         super().__init__()
-        self._pid = pid_to_watch
+        self._pid = pid
         self._is_running = True
-        self.check_interval = 1  # 每隔1秒检查一次
+        self.focus_details = {}  # <-- 核心变化：用字典记录详细焦点信息
+        self.total_focus_seconds = 0 # <-- 仍然保留总秒数，方便发信号
     def run_focus_check(self):
-
-        total_focus_seconds = 0
-    
+        print(f"[Focus Worker] 开始为 PID {self._pid} 检查窗口焦点...")
         while self._is_running:
-            time.sleep(self.check_interval)
             try:
-                foreground_window_handle = win32gui.GetForegroundWindow()
-                # 从句柄获取其所属进程的 PID
-                _, active_pid = win32process.GetWindowThreadProcessId(foreground_window_handle)
-                # 如果当前活动窗口的 PID 就是我们正在监视的 PID
-                if active_pid == self._pid:
-                    # 累加时长
-                    total_focus_seconds += self.check_interval
-                    # 发送信号，通知UI更新
-                    self.time_updated.emit(total_focus_seconds)
-            except Exception:
-                # 在获取窗口信息时可能会发生各种意外（如窗口瞬间关闭），这里简单忽略
-                pass
+                # 获取当前前台窗口的句柄和PID
+                fg_window = win32gui.GetForegroundWindow()
+                _, fg_pid = win32process.GetWindowThreadProcessId(fg_window)
+                # 检查前台窗口的PID是否是我们正在监视的PID
+                if fg_pid == self._pid:
+                    window_title = win32gui.GetWindowText(fg_window)
+                    if not window_title:
+                        window_title = "[无标题]"
+                    
+                    # 更新字典
+                    self.focus_details[window_title] = self.focus_details.get(window_title, 0) + 1
+                    
+                    # 更新总时长并发送信号
+                    self.total_focus_seconds += 1
+                    self.time_updated.emit(self.total_focus_seconds)
+                time.sleep(1) # 每秒检查一次
+            except Exception as e:
+                # 如果进程已不存在，优雅地退出循环
+                if not psutil.pid_exists(self._pid):
+                    print(f"[Focus Worker] 监视的 PID {self._pid} 已消失，线程退出。")
+                    break
+                print(f"[Focus Worker] 检查焦点时出错: {e}")
+        
+        print(f"[Focus Worker] 焦点计时结束。最终焦点详情: {self.focus_details}")
         self.finished.emit()
     def stop(self):
-        """
-        从外部调用此方法来安全地停止循环。
-        """
         self._is_running = False
+    def get_focus_details(self) -> dict: 
+        """获取详细的焦点时间和标题的字典"""
+        return self.focus_details
