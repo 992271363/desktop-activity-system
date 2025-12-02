@@ -73,7 +73,7 @@
        <widget class="QLineEdit" name="user_input"/>
       </item>
       <item>
-       <widget class="QLineEdit" name="pass_int"/>
+       <widget class="QLineEdit" name="pass_input"/>
       </item>
      </layout>
     </item>

@@ -58,10 +58,10 @@ class Ui_LoginLog(object):
 
         self.verticalLayout_2.addWidget(self.user_input)
 
-        self.pass_int = QLineEdit(self.widget)
-        self.pass_int.setObjectName(u"pass_int")
+        self.pass_input = QLineEdit(self.widget)
+        self.pass_input.setObjectName(u"pass_input")
 
-        self.verticalLayout_2.addWidget(self.pass_int)
+        self.verticalLayout_2.addWidget(self.pass_input)
 
 
         self.horizontalLayout.addLayout(self.verticalLayout_2)
