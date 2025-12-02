@@ -28,7 +28,6 @@ def get_dashboard(request: Request, db: Session = Depends(get_db)):
     这个函数将作为仪表盘的主页。
     它会从数据库查询数据，然后渲染一个HTML页面来展示它们。
     """
-
     activities = db.query(models.ActivityLog).order_by(models.ActivityLog.start_time.desc()).all()
     
     return templates.TemplateResponse(
