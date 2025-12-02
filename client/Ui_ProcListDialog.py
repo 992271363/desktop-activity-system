@@ -43,6 +43,11 @@ class Ui_ProcList(object):
 
         self.horizontalLayout_2 = QHBoxLayout()
         self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
+        self.list_brush = QPushButton(ProcList)
+        self.list_brush.setObjectName(u"list_brush")
+
+        self.horizontalLayout_2.addWidget(self.list_brush)
+
         self.horizontalSpacer_2 = QSpacerItem(34, 14, QSizePolicy.Expanding, QSizePolicy.Minimum)
 
         self.horizontalLayout_2.addItem(self.horizontalSpacer_2)
@@ -95,6 +100,7 @@ class Ui_ProcList(object):
         ___qtablewidgetitem1.setText(QCoreApplication.translate("ProcList", u"\u8fdb\u7a0b\u540d", None));
         ___qtablewidgetitem2 = self.procTable.horizontalHeaderItem(2)
         ___qtablewidgetitem2.setText(QCoreApplication.translate("ProcList", u"\u8fdb\u7a0b\u8def\u5f84", None));
+        self.list_brush.setText(QCoreApplication.translate("ProcList", u"\u5237\u65b0", None))
         self.lineEdit_search.setPlaceholderText(QCoreApplication.translate("ProcList", u"\u641c\u7d20", None))
         self.label.setText(QCoreApplication.translate("ProcList", u"\u8fc7\u957f\u7684\u503c\u53ef\u4ee5\u60ac\u6d6e\u9f20\u6807\u663e\u793a", None))
         self.pushButton_accept.setText(QCoreApplication.translate("ProcList", u"\u786e\u8ba4", None))

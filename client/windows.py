@@ -3,7 +3,8 @@ from PySide6.QtCore import Qt, QObject, Signal, QThread
 from PySide6.QtWidgets import (QApplication, QMainWindow, QDialog,QTableWidgetItem,
                                QHeaderView, QAbstractItemView)
 from services import (ProcessMonitorWorker, ApiSyncWorker, FocusTimeWorker,
-                      get_process_list, log_activity)
+                      get_process_list)
+from tracking_service import add_or_get_watched_app, record_process_session 
 from local_database import SessionLocal 
 from Ui_PidSelect import Ui_desktopActivitySystem
 from Ui_ProcListDialog import Ui_ProcList
@@ -13,12 +14,15 @@ class Mywindow(QMainWindow,Ui_desktopActivitySystem):
         super().__init__()  
         self.setupUi(self)
         self.proc_pid = None
-        self.monitor_thread = None
-        self.monitor_worker = None 
-        self.sync_thread = None
-        self.sync_worker = None
-        self.focus_thread = None
-        self.focus_worker = None
+        self.current_executable_name = None # 使用完整可执行文件名作为唯一标识
+        self.current_proc_start_time = None # 用于记录进程启动时间
+        self.current_focus_seconds = 0 # 用于累计当前会话的焦点时间
+        self.monitor_thread = None # 用于监控进程的线程
+        self.monitor_worker = None # 用于监控进程的工作线程
+        self.sync_thread = None # 用于同步数据的线程
+        self.sync_worker = None # 用于同步数据的工作线程
+        self.focus_thread = None # 用于计算焦点时间的线程
+        self.focus_worker = None # 用于计算焦点时间的工作线程
 
         self.pushButton_procs.clicked.connect(self.open_process_dialog)
         self.proc_name_show.setText("尚未选择进程") 
@@ -34,8 +38,29 @@ class Mywindow(QMainWindow,Ui_desktopActivitySystem):
             if dialog.exec() == QDialog.Accepted:
                 selected_pid = dialog.get_selected_pid()
                 if selected_pid:
-                   self.update_proc_info(selected_pid)
-                   self.start_monitoring_process(selected_pid)
+                   try:
+                       proc = psutil.Process(selected_pid)
+                       executable_name = proc.name() # 使用 proc.name() 作为唯一标识
+                       # 与数据库交互
+                       db = SessionLocal()
+                       summary = add_or_get_watched_app(db, executable_name)
+                       db.close()
+                       
+                       if summary:
+                           self.statusBar().showMessage(
+                               f"'{executable_name}' 已追踪。累计运行: {summary.total_lifetime_seconds}s, "
+                               f"累计焦点: {summary.total_focus_time_seconds}s", 10000 # 显示10秒
+                           )
+                       # 启动监视
+                       self.update_proc_info(selected_pid)
+                       self.start_monitoring_process(pid=selected_pid, executable_name=executable_name)
+                   
+                   except psutil.NoSuchProcess:
+                       self.statusBar().showMessage(f"错误：进程 {selected_pid} 已消失。", 5000)
+                   except Exception as e:
+                       print(f"[UI Error] 处理选中进程时出错: {e}")
+                       self.statusBar().showMessage(f"发生内部错误: {e}", 5000)
+                   # --- 主要修改 END ---
         except KeyboardInterrupt:
             print("[UI] 在打开对话框时捕获到意外的 KeyboardInterrupt，已忽略。程序将继续运行。")
             pass
@@ -46,7 +71,7 @@ class Mywindow(QMainWindow,Ui_desktopActivitySystem):
             self.proc_pid = pid
             self.current_proc_name = proc.name() 
             self.current_proc_start_time = datetime.datetime.fromtimestamp(proc.create_time())
-            self.proc_name_show.setText(self.current_proc_name)
+            self.proc_name_show.setText(proc.name())
             self.proc_path_show.setText(proc.exe())
             create_time_str = self.current_proc_start_time.strftime("%Y年%m月%d日 %H:%M:%S")
             self.proc_start_time_show.setText(create_time_str)
@@ -57,7 +82,7 @@ class Mywindow(QMainWindow,Ui_desktopActivitySystem):
             self.proc_start_time_show.setText("N/A")
             self.proc_end_time_show.setText("N/A")
 
-    def start_monitoring_process(self, pid):
+    def start_monitoring_process(self, pid: int, executable_name: str):
         # 停止旧的监控线程（如果存在）
         if self.monitor_thread and self.monitor_thread.isRunning():
             self.monitor_worker.stop()
@@ -71,6 +96,8 @@ class Mywindow(QMainWindow,Ui_desktopActivitySystem):
             
         # 重置UI
         self.label_focus_time_show.setText(" 0 秒")
+        self.current_focus_seconds = 0 # 重置焦点时间计数器
+        self.current_executable_name = executable_name # 保存当前监视的程序名
 
         # 启动新的进程生命周期监控线程
         self.monitor_thread = QThread()
@@ -95,7 +122,7 @@ class Mywindow(QMainWindow,Ui_desktopActivitySystem):
 
     def on_focus_time_updated(self, seconds: int):
         self.label_focus_time_show.setText(f" {seconds} 秒")
-
+        self.current_focus_seconds = seconds # 持续更新当前会话的焦点总时长
     def start_api_sync_service(self):
         if self.sync_thread and self.sync_thread.isRunning():
             print("[Sync Service] 服务已经在运行中，无需重复启动。")
@@ -113,7 +140,6 @@ class Mywindow(QMainWindow,Ui_desktopActivitySystem):
     def update_status_bar(self, message: str):
         print(f"[Sync Status] {message}") 
 
-    # <--- 修正：整合为一个完整、正确的 closeEvent 方法
     def closeEvent(self, event):
         """重写关闭事件，确保所有后台线程都安全退出"""
         print("[Main Window] 关闭事件触发，正在清理所有后台线程...")
@@ -159,11 +185,12 @@ class Mywindow(QMainWindow,Ui_desktopActivitySystem):
         db = None
         try:
             db = SessionLocal() 
-            log_activity(
+            record_process_session(
                 db=db,
-                proc_name=self.current_proc_name,
-                start=self.current_proc_start_time,
-                end=end_time
+                executable_name=self.current_executable_name,
+                start_time=self.current_proc_start_time,
+                end_time=end_time,
+                focus_seconds=self.current_focus_seconds # 传入累计的焦点时间
             )
         except Exception as e:
             print(f"[Manager] 数据库操作时发生错误: {e}")
@@ -191,6 +218,7 @@ class DialogWindow(QDialog, Ui_ProcList):
         self.proc_pid = None
         self.proc_name = None
         self.proc_path = None
+        self.list_brush.clicked.connect(self.populate_process_list) # 列表刷新按钮
         header = self.procTable.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.Interactive)
@@ -211,7 +239,9 @@ class DialogWindow(QDialog, Ui_ProcList):
         return self.procTable.item(row, 0).data(Qt.ItemDataRole.UserRole)
 
     def populate_process_list(self):
-        processes = get_process_list()
+        self.procTable.setSortingEnabled(False)
+        self.procTable.setRowCount(0) # 清空旧数据
+        processes = get_process_list() # 获取新数据
         self.procTable.setRowCount(len(processes))
         for row, proc_info in enumerate(processes):
             pid_item = QTableWidgetItem()
@@ -225,3 +255,4 @@ class DialogWindow(QDialog, Ui_ProcList):
             self.procTable.setItem(row, 0, pid_item)
             self.procTable.setItem(row, 1, name_item)
             self.procTable.setItem(row, 2, path_item)
+        self.procTable.setSortingEnabled(True)
