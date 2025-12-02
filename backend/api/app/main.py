@@ -147,26 +147,3 @@ def get_dashboard(
         # 将 user_sessions 传递给模板，而不是旧的 activities
         {"request": request, "sessions": user_sessions, "user": current_user}
     )
-
-@app.post("/process-data/", response_model=List[schemas.ActivityLog])
-def create_activity_log_batch(
-    data_batch: List[schemas.ActivityLogCreate],
-    db: Session = Depends(database.get_db),
-    # 使用标准的 Bearer Token 依赖来保护此接口
-    current_user: models.User = Depends(auth.get_current_user)
-):
-    """
-    保护数据上传接口，只有携带有效令牌的客户端才能上传数据。
-    上传的数据将自动与当前用户关联。
-    """
-    created_records = []
-    for data_item in data_batch:
-        # 在创建记录时，关联当前用户的 ID
-        db_item = models.ActivityLog(**data_item.model_dump(), user_id=current_user.id)
-        db.add(db_item)
-        created_records.append(db_item)
-    
-    db.commit()
-    for record in created_records:
-        db.refresh(record)
-    return created_records
