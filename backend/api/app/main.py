@@ -4,8 +4,8 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from typing import List
-import models, schemas 
-from database import SessionLocal, engine
+from . import models, schemas 
+from .database import SessionLocal, engine
 
 
 models.Base.metadata.create_all(bind=engine) 
