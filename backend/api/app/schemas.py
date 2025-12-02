@@ -20,7 +20,7 @@ class ActivityLog(ActivityLogBase):
     user_id: int
 
     class Config:
-        orm_mode = True # 在Pydantic V2中应为 from_attributes = True
+        from_attributes = True
 
 class UserBase(BaseModel):
     username: str

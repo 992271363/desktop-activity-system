@@ -1,7 +1,7 @@
-import os
-from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+import os # 用于获取环境变量（数据库连接信息）
+from sqlalchemy import create_engine # 用于创建数据库引擎
+from sqlalchemy.ext.declarative import declarative_base # 用于创建ORM基类
+from sqlalchemy.orm import sessionmaker # 用于创建数据库会话
 
 # 从环境变量中获取数据库连接信息
 DB_USER = os.getenv("DATABASE_USER")
