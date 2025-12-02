@@ -18,15 +18,15 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
 from PySide6.QtWidgets import (QApplication, QLabel, QPushButton, QSizePolicy,
     QVBoxLayout, QWidget)
 
-class Ui_KokoroJourney(object):
-    def setupUi(self, KokoroJourney):
-        if not KokoroJourney.objectName():
-            KokoroJourney.setObjectName(u"KokoroJourney")
-        KokoroJourney.resize(363, 170)
-        self.pushButton_procs = QPushButton(KokoroJourney)
+class Ui_desktopActivitySystem(object):
+    def setupUi(self, desktopActivitySystem):
+        if not desktopActivitySystem.objectName():
+            desktopActivitySystem.setObjectName(u"desktopActivitySystem")
+        desktopActivitySystem.resize(363, 170)
+        self.pushButton_procs = QPushButton(desktopActivitySystem)
         self.pushButton_procs.setObjectName(u"pushButton_procs")
         self.pushButton_procs.setGeometry(QRect(110, 120, 131, 31))
-        self.layoutWidget = QWidget(KokoroJourney)
+        self.layoutWidget = QWidget(desktopActivitySystem)
         self.layoutWidget.setObjectName(u"layoutWidget")
         self.layoutWidget.setGeometry(QRect(90, 20, 261, 84))
         self.verticalLayout = QVBoxLayout(self.layoutWidget)
@@ -52,7 +52,7 @@ class Ui_KokoroJourney(object):
 
         self.verticalLayout.addWidget(self.proc_end_time_show)
 
-        self.layoutWidget1 = QWidget(KokoroJourney)
+        self.layoutWidget1 = QWidget(desktopActivitySystem)
         self.layoutWidget1.setObjectName(u"layoutWidget1")
         self.layoutWidget1.setGeometry(QRect(1, 20, 81, 84))
         self.verticalLayout_2 = QVBoxLayout(self.layoutWidget1)
@@ -83,21 +83,21 @@ class Ui_KokoroJourney(object):
         self.verticalLayout_2.addWidget(self.end_time_label_2)
 
 
-        self.retranslateUi(KokoroJourney)
+        self.retranslateUi(desktopActivitySystem)
 
-        QMetaObject.connectSlotsByName(KokoroJourney)
+        QMetaObject.connectSlotsByName(desktopActivitySystem)
     # setupUi
 
-    def retranslateUi(self, KokoroJourney):
-        KokoroJourney.setWindowTitle(QCoreApplication.translate("KokoroJourney", u"KokoroJourney", None))
-        self.pushButton_procs.setText(QCoreApplication.translate("KokoroJourney", u"\u9009\u62e9\u8fdb\u7a0b", None))
-        self.proc_name_show.setText(QCoreApplication.translate("KokoroJourney", u"N/A", None))
-        self.proc_path_show.setText(QCoreApplication.translate("KokoroJourney", u"N/A", None))
-        self.proc_start_time_show.setText(QCoreApplication.translate("KokoroJourney", u"N/A", None))
-        self.proc_end_time_show.setText(QCoreApplication.translate("KokoroJourney", u"N/A", None))
-        self.proc_name_label.setText(QCoreApplication.translate("KokoroJourney", u"\u6e38\u620f\u540d\uff1a", None))
-        self.proc_path_label.setText(QCoreApplication.translate("KokoroJourney", u"\u8def\u5f84\uff1a", None))
-        self.start_time_label.setText(QCoreApplication.translate("KokoroJourney", u"\u542f\u52a8\u65f6\u95f4\uff1a", None))
-        self.end_time_label_2.setText(QCoreApplication.translate("KokoroJourney", u"\u7ed3\u675f\u65f6\u95f4\uff1a", None))
+    def retranslateUi(self, desktopActivitySystem):
+        desktopActivitySystem.setWindowTitle(QCoreApplication.translate("desktopActivitySystem", u"desktopActivitySystem", None))
+        self.pushButton_procs.setText(QCoreApplication.translate("desktopActivitySystem", u"\u9009\u62e9\u8fdb\u7a0b", None))
+        self.proc_name_show.setText(QCoreApplication.translate("desktopActivitySystem", u"N/A", None))
+        self.proc_path_show.setText(QCoreApplication.translate("desktopActivitySystem", u"N/A", None))
+        self.proc_start_time_show.setText(QCoreApplication.translate("desktopActivitySystem", u"N/A", None))
+        self.proc_end_time_show.setText(QCoreApplication.translate("desktopActivitySystem", u"N/A", None))
+        self.proc_name_label.setText(QCoreApplication.translate("desktopActivitySystem", u"\u8fdb\u7a0b\u540d\uff1a", None))
+        self.proc_path_label.setText(QCoreApplication.translate("desktopActivitySystem", u"\u8def\u5f84\uff1a", None))
+        self.start_time_label.setText(QCoreApplication.translate("desktopActivitySystem", u"\u542f\u52a8\u65f6\u95f4\uff1a", None))
+        self.end_time_label_2.setText(QCoreApplication.translate("desktopActivitySystem", u"\u7ed3\u675f\u65f6\u95f4\uff1a", None))
     # retranslateUi
 

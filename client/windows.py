@@ -2,12 +2,12 @@ import psutil, datetime, time
 from PySide6.QtCore import Qt, QObject, Signal, QThread
 from PySide6.QtWidgets import (QApplication, QMainWindow, QDialog,QTableWidgetItem,
                                QHeaderView, QAbstractItemView)
-from services import ProcessMonitorWorker, get_process_list
-
-from Ui_PidSelect import Ui_KokoroJourney
+from services import ProcessMonitorWorker, get_process_list, log_activity
+from local_database import SessionLocal 
+from Ui_PidSelect import Ui_desktopActivitySystem
 from Ui_ProcListDialog import Ui_ProcList
 
-class Mywindow(QMainWindow,Ui_KokoroJourney):
+class Mywindow(QMainWindow,Ui_desktopActivitySystem):
     def __init__(self):
         super().__init__()  
         self.setupUi(self)
@@ -22,25 +22,28 @@ class Mywindow(QMainWindow,Ui_KokoroJourney):
         self.proc_end_time_show.setText("尚未选择进程")
     def open_process_dialog(self):
         dialog = DialogWindow(self)
-        if dialog.exec() == QDialog.Accepted:
-            selected_pid = dialog.get_selected_pid()
-            if selected_pid:
-                self.update_proc_info(selected_pid)
-                self.start_monitoring_process(selected_pid)
+        try:
+            if dialog.exec() == QDialog.Accepted:
+                selected_pid = dialog.get_selected_pid()
+                if selected_pid:
+                   self.update_proc_info(selected_pid)
+                   self.start_monitoring_process(selected_pid)
+        except KeyboardInterrupt:
+            print("[UI] 在打开对话框时捕获到意外的 KeyboardInterrupt，已忽略。程序将继续运行。")
+            pass
     def update_proc_info(self, pid):
         try:
             proc = psutil.Process(pid)
             self.proc_pid = pid
-            self.proc_name_show.setText(proc.name())
+            
+            self.current_proc_name = proc.name() 
+            self.current_proc_start_time = datetime.datetime.fromtimestamp(proc.create_time()) # <-- 新增
+
+            self.proc_name_show.setText(self.current_proc_name)
             self.proc_path_show.setText(proc.exe())
             
-            create_time = datetime.datetime.fromtimestamp(proc.create_time())
-            year = create_time.year
-            month = create_time.month
-            day = create_time.day
-            time_str = create_time.strftime("%H:%M:%S")
-            self.create_time_str = f"{year}年{month:02d}月{day:02d}日 {time_str}"
-            self.proc_start_time_show.setText(self.create_time_str)
+            create_time_str = self.current_proc_start_time.strftime("%Y年%m月%d日 %H:%M:%S")
+            self.proc_start_time_show.setText(create_time_str)
             self.proc_end_time_show.setText("监视中...") 
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             self.proc_name_show.setText(f"无法访问进程 {pid}")
@@ -65,12 +68,29 @@ class Mywindow(QMainWindow,Ui_KokoroJourney):
     def on_process_terminated(self, pid: int, end_time: datetime.datetime):
         if self.proc_pid != pid:
             return
-        year = end_time.year
-        month = end_time.month
-        day = end_time.day
-        time_str = end_time.strftime("%H:%M:%S")
-        end_time_str = f"{year}年{month:02d}月{day:02d}日 {time_str}"
+        
+        end_time_str = end_time.strftime("%Y年%m月%d日 %H:%M:%S")
         self.proc_end_time_show.setText(end_time_str)
+        
+        print("[Manager] 进程终止，准备写入数据库...")
+        db = None # 初始化 db 变量
+        try:
+            # 1. 创建数据库会话
+            db = SessionLocal() 
+            # 2. 调用服务函数，传入所需的所有信息
+            log_activity(
+                db=db,
+                proc_name=self.current_proc_name,
+                start=self.current_proc_start_time,
+                end=end_time
+            )
+        except Exception as e:
+            print(f"[Manager] 数据库操作时发生错误: {e}")
+        finally:
+            # 3. 无论成功与否，都确保关闭会话
+            if db:
+                db.close()
+                print("[Manager] 数据库会话已关闭。")
     def on_monitor_finished(self):
         print("[Manager] 确认监视线程已结束。")
     def on_monitor_error(self, error_message):

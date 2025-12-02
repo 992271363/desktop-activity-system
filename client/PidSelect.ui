@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>KokoroJourney</class>
- <widget class="QWidget" name="KokoroJourney">
+ <class>desktopActivitySystem</class>
+ <widget class="QWidget" name="desktopActivitySystem">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>KokoroJourney</string>
+   <string>desktopActivitySystem</string>
   </property>
   <widget class="QPushButton" name="pushButton_procs">
    <property name="geometry">
@@ -79,7 +79,7 @@
     <item>
      <widget class="QLabel" name="proc_name_label">
       <property name="text">
-       <string>游戏名：</string>
+       <string>进程名：</string>
       </property>
       <property name="alignment">
        <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
