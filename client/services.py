@@ -2,11 +2,15 @@ import os
 import time
 import psutil
 import datetime
+import win32gui
+import win32process
 from PySide6.QtCore import QObject, Signal
 from sqlalchemy.orm import Session
 from local_models import ActivityLog
 from client_api import send_data_to_api 
 from local_database import SessionLocal
+
+
 def get_process_list():
     attrs = ['pid', 'name', 'exe']
     process_data = []
@@ -181,4 +185,39 @@ class ApiSyncWorker(QObject):
         self.status_updated.emit("云同步服务已停止。")
         self.finished.emit()
     def stop(self):
+        self._is_running = False
+
+# 进程焦点时间监控
+class FocusTimeWorker(QObject):
+    time_updated = Signal(int)
+    finished = Signal()
+    def __init__(self, pid_to_watch: int):
+        super().__init__()
+        self._pid = pid_to_watch
+        self._is_running = True
+        self.check_interval = 1  # 每隔1秒检查一次
+    def run_focus_check(self):
+
+        total_focus_seconds = 0
+    
+        while self._is_running:
+            time.sleep(self.check_interval)
+            try:
+                foreground_window_handle = win32gui.GetForegroundWindow()
+                # 从句柄获取其所属进程的 PID
+                _, active_pid = win32process.GetWindowThreadProcessId(foreground_window_handle)
+                # 如果当前活动窗口的 PID 就是我们正在监视的 PID
+                if active_pid == self._pid:
+                    # 累加时长
+                    total_focus_seconds += self.check_interval
+                    # 发送信号，通知UI更新
+                    self.time_updated.emit(total_focus_seconds)
+            except Exception:
+                # 在获取窗口信息时可能会发生各种意外（如窗口瞬间关闭），这里简单忽略
+                pass
+        self.finished.emit()
+    def stop(self):
+        """
+        从外部调用此方法来安全地停止循环。
+        """
         self._is_running = False

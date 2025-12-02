@@ -22,13 +22,13 @@ class Ui_desktopActivitySystem(object):
     def setupUi(self, desktopActivitySystem):
         if not desktopActivitySystem.objectName():
             desktopActivitySystem.setObjectName(u"desktopActivitySystem")
-        desktopActivitySystem.resize(363, 170)
+        desktopActivitySystem.resize(363, 181)
         self.pushButton_procs = QPushButton(desktopActivitySystem)
         self.pushButton_procs.setObjectName(u"pushButton_procs")
-        self.pushButton_procs.setGeometry(QRect(110, 120, 131, 31))
+        self.pushButton_procs.setGeometry(QRect(110, 140, 131, 31))
         self.layoutWidget = QWidget(desktopActivitySystem)
         self.layoutWidget.setObjectName(u"layoutWidget")
-        self.layoutWidget.setGeometry(QRect(90, 20, 261, 84))
+        self.layoutWidget.setGeometry(QRect(90, 20, 261, 106))
         self.verticalLayout = QVBoxLayout(self.layoutWidget)
         self.verticalLayout.setObjectName(u"verticalLayout")
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
@@ -52,9 +52,14 @@ class Ui_desktopActivitySystem(object):
 
         self.verticalLayout.addWidget(self.proc_end_time_show)
 
+        self.label_focus_time_show = QLabel(self.layoutWidget)
+        self.label_focus_time_show.setObjectName(u"label_focus_time_show")
+
+        self.verticalLayout.addWidget(self.label_focus_time_show)
+
         self.layoutWidget1 = QWidget(desktopActivitySystem)
         self.layoutWidget1.setObjectName(u"layoutWidget1")
-        self.layoutWidget1.setGeometry(QRect(1, 20, 81, 84))
+        self.layoutWidget1.setGeometry(QRect(1, 20, 86, 106))
         self.verticalLayout_2 = QVBoxLayout(self.layoutWidget1)
         self.verticalLayout_2.setObjectName(u"verticalLayout_2")
         self.verticalLayout_2.setContentsMargins(0, 0, 0, 0)
@@ -76,11 +81,17 @@ class Ui_desktopActivitySystem(object):
 
         self.verticalLayout_2.addWidget(self.start_time_label)
 
-        self.end_time_label_2 = QLabel(self.layoutWidget1)
-        self.end_time_label_2.setObjectName(u"end_time_label_2")
-        self.end_time_label_2.setAlignment(Qt.AlignRight|Qt.AlignTrailing|Qt.AlignVCenter)
+        self.end_time_label = QLabel(self.layoutWidget1)
+        self.end_time_label.setObjectName(u"end_time_label")
+        self.end_time_label.setAlignment(Qt.AlignRight|Qt.AlignTrailing|Qt.AlignVCenter)
 
-        self.verticalLayout_2.addWidget(self.end_time_label_2)
+        self.verticalLayout_2.addWidget(self.end_time_label)
+
+        self.focus_time_label = QLabel(self.layoutWidget1)
+        self.focus_time_label.setObjectName(u"focus_time_label")
+        self.focus_time_label.setAlignment(Qt.AlignRight|Qt.AlignTrailing|Qt.AlignVCenter)
+
+        self.verticalLayout_2.addWidget(self.focus_time_label)
 
 
         self.retranslateUi(desktopActivitySystem)
@@ -95,9 +106,11 @@ class Ui_desktopActivitySystem(object):
         self.proc_path_show.setText(QCoreApplication.translate("desktopActivitySystem", u"N/A", None))
         self.proc_start_time_show.setText(QCoreApplication.translate("desktopActivitySystem", u"N/A", None))
         self.proc_end_time_show.setText(QCoreApplication.translate("desktopActivitySystem", u"N/A", None))
+        self.label_focus_time_show.setText(QCoreApplication.translate("desktopActivitySystem", u"N/A", None))
         self.proc_name_label.setText(QCoreApplication.translate("desktopActivitySystem", u"\u8fdb\u7a0b\u540d\uff1a", None))
         self.proc_path_label.setText(QCoreApplication.translate("desktopActivitySystem", u"\u8def\u5f84\uff1a", None))
         self.start_time_label.setText(QCoreApplication.translate("desktopActivitySystem", u"\u542f\u52a8\u65f6\u95f4\uff1a", None))
-        self.end_time_label_2.setText(QCoreApplication.translate("desktopActivitySystem", u"\u7ed3\u675f\u65f6\u95f4\uff1a", None))
+        self.end_time_label.setText(QCoreApplication.translate("desktopActivitySystem", u"\u7ed3\u675f\u65f6\u95f4\uff1a", None))
+        self.focus_time_label.setText(QCoreApplication.translate("desktopActivitySystem", u"\u7a97\u53e3\u505c\u7559\u65f6\u957f\uff1a", None))
     # retranslateUi
 

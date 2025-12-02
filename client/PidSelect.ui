@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>363</width>
-    <height>170</height>
+    <height>181</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -17,7 +17,7 @@
    <property name="geometry">
     <rect>
      <x>110</x>
-     <y>120</y>
+     <y>140</y>
      <width>131</width>
      <height>31</height>
     </rect>
@@ -32,7 +32,7 @@
      <x>90</x>
      <y>20</y>
      <width>261</width>
-     <height>84</height>
+     <height>106</height>
     </rect>
    </property>
    <layout class="QVBoxLayout" name="verticalLayout">
@@ -64,6 +64,13 @@
       </property>
      </widget>
     </item>
+    <item>
+     <widget class="QLabel" name="label_focus_time_show">
+      <property name="text">
+       <string>N/A</string>
+      </property>
+     </widget>
+    </item>
    </layout>
   </widget>
   <widget class="QWidget" name="layoutWidget">
@@ -71,8 +78,8 @@
     <rect>
      <x>1</x>
      <y>20</y>
-     <width>81</width>
-     <height>84</height>
+     <width>86</width>
+     <height>106</height>
     </rect>
    </property>
    <layout class="QVBoxLayout" name="verticalLayout_2">
@@ -107,9 +114,19 @@
      </widget>
     </item>
     <item>
-     <widget class="QLabel" name="end_time_label_2">
+     <widget class="QLabel" name="end_time_label">
       <property name="text">
        <string>结束时间：</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QLabel" name="focus_time_label">
+      <property name="text">
+       <string>窗口停留时长：</string>
       </property>
       <property name="alignment">
        <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
