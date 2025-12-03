@@ -10,8 +10,8 @@ from sync_service import ApiSyncWorker, get_and_prepare_sync_data, mark_activiti
 from client_api import send_data_to_api
 
 from services import ProcessMonitorWorker, FocusTimeWorker, get_process_list
-from Ui_PidSelect import Ui_desktopActivitySystem
-from Ui_ProcListDialog import Ui_ProcList
+from .UiFile.Ui_PidSelect import Ui_desktopActivitySystem
+from .UiFile.Ui_ProcListDialog import Ui_ProcList
 
 class Mywindow(QMainWindow, Ui_desktopActivitySystem):
     request_stop_monitor = Signal()
