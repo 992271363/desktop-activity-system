@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from enum import Enum
 
 load_dotenv()
-API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:8000")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1:80")
 
 #定义一个清晰的登录状态枚举
 class LoginStatus(Enum):
