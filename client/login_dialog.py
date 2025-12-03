@@ -1,6 +1,6 @@
 from PySide6.QtCore import QObject, Signal, QThread
 from PySide6.QtWidgets import QDialog
-from .UiFile.Ui_loginLog import Ui_LoginLog
+from UiFile.Ui_loginLog import Ui_LoginLog
 from client_api import api_login, LoginStatus
 
 # 创建一个专门用于执行登录任务的 Worker 类
