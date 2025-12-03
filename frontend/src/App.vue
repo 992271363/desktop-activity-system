@@ -6,6 +6,4 @@ import { RouterView } from 'vue-router'
   <RouterView />
 </template>
 
-<style scoped>
-/* 你可以留一些全局样式在这里，或者像现在这样保持空白 */
-</style>
+<style scoped></style>
