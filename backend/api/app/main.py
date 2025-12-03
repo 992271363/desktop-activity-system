@@ -1,18 +1,12 @@
-from pathlib import Path
-from typing import List, Optional
-from fastapi import Request, FastAPI, Depends, HTTPException, status, Response
+from typing import List
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 from . import models, schemas, auth, database
 
 # 初始化数据库表
 models.Base.metadata.create_all(bind=database.engine) 
 
-# FastAPI 实例和模板配置
-templates_dir = Path(__file__).parent.joinpath("templates")
-templates = Jinja2Templates(directory=templates_dir)
 app = FastAPI()
 
 # 核心 API: 智能同步接口 (采用手动事务控制)
@@ -108,41 +102,7 @@ def sync_sessions_from_client(
             detail=f"同步失败，服务器内部错误: {str(e)}"
         )
 
-# 从 Cookie 中获取用户
-async def get_current_user_from_cookie(request: Request, db: Session = Depends(database.get_db)) -> Optional[models.User]:
-    token = request.cookies.get("access_token")
-    if not token:
-        return None
-    try:
-        user = auth.get_current_user(token=token.split(" ")[1], db=db)
-        return user
-    except HTTPException:
-        return None
 
-# 浏览器登录页面
-@app.get("/login", response_class=HTMLResponse, tags=["UI Authentication"])
-async def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
-
-# 处理浏览器登录表单提交
-@app.post("/login", tags=["UI Authentication"])
-async def handle_login(response: Response, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
-    user = auth.authenticate_user(db, form_data.username, form_data.password)
-    if not user:
-        return RedirectResponse("/login?error=1", status_code=status.HTTP_302_FOUND)
-    
-    access_token = auth.create_access_token(data={"sub": user.username})
-    
-    response = RedirectResponse(url="/dashboard", status_code=status.HTTP_302_FOUND)
-    response.set_cookie(key="access_token", value=f"Bearer {access_token}", httponly=True)
-    return response
-
-# 登出
-@app.get("/logout", tags=["UI Authentication"])
-async def logout_and_redirect():
-    response = RedirectResponse(url="/login")
-    response.delete_cookie("access_token")
-    return response
 
 # 为客户端程序提供获取令牌的 API
 @app.post("/auth/token", response_model=dict, tags=["API Authentication"])
@@ -166,36 +126,3 @@ def register_user(user_create: schemas.UserCreate, db: Session = Depends(databas
     
     new_user = auth.create_user(db=db, user=user_create)
     return new_user
-
-# 仪表盘页面
-@app.get("/dashboard", response_class=HTMLResponse, tags=["Dashboard"])
-def get_dashboard(
-    request: Request,
-    db: Session = Depends(database.get_db),
-    current_user: Optional[models.User] = Depends(get_current_user_from_cookie)
-):
-    if not current_user:
-        return RedirectResponse(url="/login", status_code=status.HTTP_302_FOUND)
-    
-    summaries = db.query(models.ServerAppUsageSummary)\
-                  .join(models.ServerWatchedApplication)\
-                  .filter(models.ServerWatchedApplication.user_id == current_user.id)\
-                  .order_by(models.ServerAppUsageSummary.total_focus_time_seconds.desc())\
-                  .all()
-    
-    recent_sessions = db.query(models.ServerProcessSession)\
-                       .join(models.ServerAppUsageSummary)\
-                       .join(models.ServerWatchedApplication)\
-                       .filter(models.ServerWatchedApplication.user_id == current_user.id)\
-                       .order_by(models.ServerProcessSession.session_start_time.desc())\
-                       .limit(20).all()
-
-    return templates.TemplateResponse(
-        "index.html", 
-        {
-            "request": request, 
-            "user": current_user,
-            "summaries": summaries,
-            "recent_sessions": recent_sessions
-        }
-    )
