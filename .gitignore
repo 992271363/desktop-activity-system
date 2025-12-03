@@ -220,4 +220,8 @@ __marimo__/
 
 #tree
 *.ps1
-tree.txt
+tree*.txt
+
+#VueWeb
+node_modules/
+dist/
