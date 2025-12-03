@@ -214,3 +214,10 @@ __marimo__/
 
 #database
 *.db
+
+#vscodeSetting
+.vscode
+
+#tree
+*.ps1
+tree.txt
