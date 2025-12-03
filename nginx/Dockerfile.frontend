@@ -2,7 +2,7 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
-COPY frontend/ ./
+COPY . ./
 # 执行构建命令，这会在 /app/dist 目录下生成静态文件
 RUN npm run build
 # 使用一个轻量的 Nginx 官方镜像
