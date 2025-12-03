@@ -43,12 +43,15 @@
       command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
     nginx:
-      build: ./nginx
+      build:
+        context: . 
+        dockerfile: ./nginx/Dockerfile
+      container_name: my-project-nginx
+      restart: always
       ports:
         - "80:80"
       depends_on:
         - backend-api
-
         
   volumes:
     mariadb_data:
