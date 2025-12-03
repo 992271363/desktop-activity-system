@@ -12,7 +12,7 @@ class User(Base):
     # 关系：一个用户可以拥有多个“被监视的应用”
     watched_applications = relationship("ServerWatchedApplication", back_populates="owner", cascade="all, delete-orphan")
 
-# 层级 1: 被监视的应用 (顶层模型)
+#被监视的应用 (顶层模型)
 class ServerWatchedApplication(Base):
     __tablename__ = 'server_watched_applications'
     id = Column(Integer, primary_key=True)
@@ -26,7 +26,7 @@ class ServerWatchedApplication(Base):
     # 关系：一个“被监视的应用”对应一个“总账”
     summary = relationship("ServerAppUsageSummary", back_populates="application", uselist=False, cascade="all, delete-orphan")
 
-# 层级 2: 应用使用总账
+# 应用使用总账
 class ServerAppUsageSummary(Base):
     __tablename__ = 'server_app_usage_summary'
     id = Column(Integer, primary_key=True)
@@ -44,7 +44,7 @@ class ServerAppUsageSummary(Base):
     application = relationship("ServerWatchedApplication", back_populates="summary")
     sessions = relationship("ServerProcessSession", back_populates="summary", cascade="all, delete-orphan")
 
-# 层级 3: 进程会话
+#进程会话
 class ServerProcessSession(Base):
     __tablename__ = 'server_process_sessions'
     id = Column(Integer, primary_key=True)
@@ -62,7 +62,7 @@ class ServerProcessSession(Base):
     summary = relationship("ServerAppUsageSummary", back_populates="sessions")
     activities = relationship("ServerFocusActivity", back_populates="session", cascade="all, delete-orphan")
 
-# 层级 4: 焦点活动
+#焦点活动
 class ServerFocusActivity(Base):
     __tablename__ = 'server_focus_activities'
     id = Column(Integer, primary_key=True)

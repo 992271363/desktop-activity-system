@@ -58,7 +58,6 @@ def api_login(username: str, password: str) -> Tuple[LoginStatus, Optional[str]]
         print(f"登录API请求失败，底层网络错误: {e}")
         return (LoginStatus.NETWORK_ERROR, None)
 
-# (send_data_to_api 函数保持不变)
 def send_data_to_api(data_list: List[Dict[str, Any]], endpoint: str, token: str) -> bool:
     if not data_list:
         return True

@@ -1,8 +1,6 @@
-<!-- src/components/TopBar.vue -->
 <template>
   <header class="top-bar">
     <div class="top-bar-content">
-      <!-- 左侧：Logo 和应用名称 -->
       <div class="logo-area">
         <svg
           width="28"
@@ -57,7 +55,7 @@
   top: 0;
   left: 0;
   width: 100%;
-  height: 64px; /* 关键！固定高度，为下方内容区留出空间 */
+  height: 64px; /* 固定高度，为下方内容区留出空间 */
   z-index: 1000; /* 确保在最上层 */
 
   /* 核心：毛玻璃背景 */

@@ -93,7 +93,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 
-// --- 数据模型定义 (前端对应后端的 Schema) ---
+// 数据模型定义 (前端对应后端的 Schema)
 interface AppSummary {
   id: number
   last_seen_end_at: string
@@ -115,8 +115,8 @@ interface ProcessSession {
   total_lifetime_seconds: number
 }
 
-// --- 数据状态定义 ---
-const username = ref('Admin') // TODO: 应该从 Token 或用户信息接口获取
+// 数据状态定义
+const username = ref('Admin') //应该从Token或用户信息接口获取
 
 const stats = ref<{
   todayFocusSeconds: number
@@ -133,7 +133,7 @@ const stats = ref<{
 const topApps = ref<WatchedApplication[]>([])
 const recentActivities = ref<ProcessSession[]>([])
 
-// --- 辅助函数 ---
+// 辅助函数
 const formatDuration = (totalSeconds: number): string => {
   if (totalSeconds < 60) return `${Math.round(totalSeconds)}秒`
   const hours = Math.floor(totalSeconds / 3600)
@@ -144,10 +144,10 @@ const formatDuration = (totalSeconds: number): string => {
   return result.trim() || '0分钟'
 }
 
-// --- API 调用逻辑 ---
+// API 调用逻辑
 const fetchData = async () => {
   try {
-    // ✅ 接着上一行，完成 Promise.all 的调用
+    // 完成 Promise.all 的调用
     const [statsRes, appsRes, activityRes] = await Promise.all([
       fetch('/api/dashboard/stats'),
       fetch('/api/dashboard/apps?sort_by=focus_time'),
@@ -171,7 +171,7 @@ const fetchData = async () => {
   }
 }
 
-// --- 生命周期钩子 ---
+// 生命周期钩子
 onMounted(() => {
   fetchData()
   console.log('Dashboard mounted. Fetching data...')

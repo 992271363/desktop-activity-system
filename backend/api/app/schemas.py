@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from datetime import datetime
 from typing import List, Optional
 
-# 用于 API 输入的模型 (从客户端接收数据)
+
 
 # 客户端发来的每个焦点活动的数据
 class SyncFocusActivity(BaseModel):

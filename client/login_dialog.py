@@ -1,12 +1,9 @@
-# login_dialog.py (最终异步版)
-
 from PySide6.QtCore import QObject, Signal, QThread
 from PySide6.QtWidgets import QDialog
 from Ui_loginLog import Ui_LoginLog
-# 我们的 API 函数和状态码保持不变，它们的设计很棒
 from client_api import api_login, LoginStatus
 
-# 步骤 1: 创建一个专门用于执行登录任务的 Worker 类
+# 创建一个专门用于执行登录任务的 Worker 类
 # 它必须继承自 QObject 才能使用信号与槽机制
 class LoginWorker(QObject):
     # 定义一个信号，当登录任务完成时，它会携带结果被发出
@@ -21,7 +18,7 @@ class LoginWorker(QObject):
     def run(self):
         """这个函数将在后台线程中执行"""
         print("LoginWorker: 开始在后台线程中执行登录...")
-        # 调用我们已有的、会阻塞的 api_login 函数
+        # 调用已有的、会阻塞的 api_login 函数
         status, token = api_login(self.username, self.password)
         # 任务完成，发出信号，将结果传递回主线程
         self.finished.emit(status, token)
@@ -55,13 +52,13 @@ class LoginDialog(QDialog, Ui_LoginLog):
             self.tips_label.setText("用户名和密码不能为空。")
             return
 
-        # --- 这是核心：UI 状态更新 ---
+
         # 立即更新UI，禁用按钮，显示等待提示。
         # 因为这是在主线程中，所以会立刻生效。
         self.login_accept.setEnabled(False)
         self.tips_label.setText("正在登录中，请稍候...")
         
-        # --- 步骤 2: 设置并启动后台线程 ---
+        # 设置并启动后台线程
         self.worker_thread = QThread()
         self.worker = LoginWorker(username_text, password_text)
         

@@ -9,7 +9,7 @@ models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI()
 
-# 核心 API: 智能同步接口 (采用手动事务控制)
+#智能同步接口(采用手动事务控制)
 @app.post("/sync/sessions/", status_code=status.HTTP_201_CREATED, tags=["Sync"])
 def sync_sessions_from_client(
     sessions_data: List[schemas.SyncProcessSession],
@@ -20,9 +20,9 @@ def sync_sessions_from_client(
         return {"message": "无新数据需要同步。"}
         
     try:
-        # --- 不再使用 with db.begin() ---
+        
         for session_dto in sessions_data:
-            # 1. 查找或创建 WatchedApplication
+            #查找或创建WatchedApplication
             watched_app = db.query(models.ServerWatchedApplication).filter_by(
                 user_id=current_user.id, 
                 executable_name=session_dto.process_name
@@ -36,7 +36,7 @@ def sync_sessions_from_client(
                 db.add(watched_app)
                 db.flush()
 
-            # 2. 锁定并更新或创建 AppUsageSummary
+            #锁定并更新或创建AppUsageSummary
             summary = db.query(models.ServerAppUsageSummary).filter_by(
                 application_id=watched_app.id
             ).with_for_update().first()
@@ -63,7 +63,7 @@ def sync_sessions_from_client(
             
             db.flush()
 
-            # 3. 创建 ProcessSession
+            #创建ProcessSession
             new_session = models.ServerProcessSession(
                 summary_id=summary.id,
                 process_name=session_dto.process_name,
@@ -75,7 +75,7 @@ def sync_sessions_from_client(
             db.add(new_session)
             db.flush()
 
-            # 4. 批量创建 FocusActivities
+            #批量创建FocusActivities
             activities_to_add = []
             for activity_data in session_dto.activities:
                 activities_to_add.append(
@@ -88,13 +88,13 @@ def sync_sessions_from_client(
             if activities_to_add:
                 db.add_all(activities_to_add)
         
-        # 5. 所有循环成功结束后，在 try 块的最后，手动提交整个事务
+        #所有循环成功结束后，在 try 块的最后，手动提交整个事务
         db.commit()
 
         return {"message": f"成功同步了 {len(sessions_data)} 个会话。"}
 
     except Exception as e:
-        # 6. 如果 try 块中的任何地方（包括 flush）发生异常，手动回滚所有更改
+        #如果 try块中的任何地方（包括flush）发生异常手动回滚所有更改
         db.rollback()
         print(f"同步过程中发生严重错误，事务已回滚: {e}")
         raise HTTPException(
@@ -104,7 +104,7 @@ def sync_sessions_from_client(
 
 
 
-# 为客户端程序提供获取令牌的 API
+# 为客户端程序提供获取令牌的API
 @app.post("/auth/token", response_model=dict, tags=["API Authentication"])
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
     user = auth.authenticate_user(db, form_data.username, form_data.password)
