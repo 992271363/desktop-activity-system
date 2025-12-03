@@ -100,7 +100,11 @@ class LoginDialog(QDialog, Ui_LoginLog):
 
     def closeEvent(self, event):
         """确保在用户强行关闭对话框时，后台线程也能被妥善停止"""
-        if self.worker_thread and self.worker_thread.isRunning():
-            self.worker_thread.quit()
-            self.worker_thread.wait(1000) # 等待最多1秒让线程结束
+        if hasattr(self, 'worker_thread') and self.worker_thread and self.worker_thread.isRunning():
+            print("LoginDialog: 用户关闭窗口，正在尝试停止仍在运行的登录线程...")
+            # 发出退出请求，但不阻塞等待，因为对话框需要立即关闭
+            self.worker_thread.quit() 
+            # 短暂等待，给线程一个退出的机会
+            self.worker_thread.wait(200)
+            
         super().closeEvent(event)
