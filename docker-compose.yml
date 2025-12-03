@@ -44,7 +44,7 @@
     nginx:
       build:
         context: ./frontend
-        dockerfile: ./nginx/Dockerfile.frontend
+        dockerfile: ../nginx/Dockerfile.frontend
       container_name: my-project-nginx
       restart: always
       ports:
