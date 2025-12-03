@@ -1,5 +1,3 @@
-# windows.py (最终修正版：强制队列连接)
-
 import psutil
 import datetime
 from PySide6.QtCore import Qt, QThread, Signal # <--- 确认 Qt 被导入
@@ -15,6 +13,7 @@ from login_dialog import LoginDialog
 from sync_service import ApiSyncWorker, get_and_prepare_sync_data, mark_activities_as_synced
 from client_api import send_data_to_api
 
+
 class Mywindow(QMainWindow, Ui_desktopActivitySystem):
     request_stop_monitor = Signal()
     request_stop_focus = Signal()
@@ -23,6 +22,7 @@ class Mywindow(QMainWindow, Ui_desktopActivitySystem):
     def __init__(self):
         super().__init__()
         self.setupUi(self)
+        
         
         self.token = None
         self.username = None
@@ -229,7 +229,10 @@ class DialogWindow(QDialog, Ui_ProcList):
         super().__init__(parent)
         self.setupUi(self)
         self.proc_pid = None
+
+        self.lineEdit_search.textChanged.connect(self.populate_process_list)
         self.list_brush.clicked.connect(self.populate_process_list) 
+
         header = self.procTable.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.Interactive)
@@ -240,6 +243,7 @@ class DialogWindow(QDialog, Ui_ProcList):
         self.procTable.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.pushButton_accept.clicked.connect(self.accept)
         self.pushButton_reject.clicked.connect(self.reject)
+
         self.populate_process_list()
 
     def get_selected_pid(self): 
@@ -250,11 +254,27 @@ class DialogWindow(QDialog, Ui_ProcList):
         return self.procTable.item(row, 0).data(Qt.ItemDataRole.UserRole)
 
     def populate_process_list(self):
+        search_term = self.lineEdit_search.text().lower().strip()
+
         self.procTable.setSortingEnabled(False)
         self.procTable.setRowCount(0) 
+        
         processes = get_process_list() 
-        self.procTable.setRowCount(len(processes))
-        for row, proc_info in enumerate(processes):
+
+        if not search_term:
+            filtered_processes = processes
+        else:
+            filtered_processes = []
+            for proc in processes:
+                pid_str = str(proc['pid'])
+                name_str = proc['name'].lower()
+                path_str = proc['exe'].lower()
+                if (search_term in pid_str or 
+                    search_term in name_str or 
+                    search_term in path_str):
+                    filtered_processes.append(proc)
+        self.procTable.setRowCount(len(filtered_processes))
+        for row, proc_info in enumerate(filtered_processes):
             pid_item = QTableWidgetItem()
             pid_item.setData(Qt.ItemDataRole.DisplayRole, proc_info['pid'])
             pid_item.setData(Qt.ItemDataRole.UserRole, proc_info['pid'])

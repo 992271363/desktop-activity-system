@@ -1,18 +1,23 @@
-# services.py (完整、最终、QTimer版)
-
 import os
 import psutil
 import datetime
 import win32gui
 import win32process
 from PySide6.QtCore import QObject, Signal, QTimer
+from typing import List, TypedDict
 
-def get_process_list():
+
+class ProcessInfo(TypedDict):
+    pid: int
+    name: str
+    exe: str
+
+def get_process_list() -> List[ProcessInfo]:
     """
     获取当前系统中可用的进程列表。
     """
     attrs = ['pid', 'name', 'exe']
-    process_data = []
+    process_data: List[ProcessInfo] = []
     path_separator = os.sep
     for proc in psutil.process_iter(attrs=attrs):
         try:
