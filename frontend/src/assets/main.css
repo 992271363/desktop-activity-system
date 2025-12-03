@@ -1,4 +1,6 @@
-/* 1. 一些基本的样式重置，让不同浏览器的表现更统一 */
+/* src/assets/main.css - 恢复纯净的原始版本 */
+
+/* 1. 全局盒子模型与重置 */
 *,
 *::before,
 *::after {
@@ -7,7 +9,6 @@
   padding: 0;
 }
 
-/* 2. 让整个应用占满屏幕，并为居中做准备 */
 html,
 body,
 #app {
@@ -15,16 +16,26 @@ body,
   width: 100%;
 }
 
-body {
+/* 2. 设置全局字体和基础样式 */
+html {
   font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans',
-    'Droid Sans', 'Helvetica Neue', sans-serif; /* 使用更现代的字体 */
-  background-color: #f0f2f5; /* 给个淡淡的背景色，让白色登录框更突出 */
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans',
+    sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* 3. 最关键的一步：使用 Flex 布局让 #app 内部的元素垂直和水平都居中 */
+/* 3. 为 body 设置贯穿整个应用的背景 */
+body {
+  background-image: url('@/assets/images/BG.jpg');
+  background-color: #1a202c; /* 图片加载失败时的备用色 */
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed; /* 固定背景，滚动时不移动 */
+}
+
+/* 4. 让 #app 容器占满整个视口 */
 #app {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  width: 100%;
+  min-height: 100vh;
 }
