@@ -18,7 +18,7 @@
       </div>
       <div class="stat-card">
         <h3>今日最常用应用</h3>
-        <p>{{ stats.mostUsedAppToday || '加载中...' }}</p>
+        <p>{{ stats.mostUsedAppToday ? formatAppName(stats.mostUsedAppToday) : '加载中...' }}</p>
         <span class="card-icon"><i class="fas fa-crown"></i></span>
       </div>
       <div class="stat-card">
