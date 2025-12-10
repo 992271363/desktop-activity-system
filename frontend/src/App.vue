@@ -5,7 +5,6 @@ import TopBar from '@/components/TopBar.vue'
 const route = useRoute()
 </script>
 <template>
-  <TopBar />
   <TopBar v-if="!route.meta.hideTopBar" />
   <main class="main-content">
     <RouterView />
