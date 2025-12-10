@@ -92,10 +92,21 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import request from '@/utils/request'
+import { useAuthStore } from '@/stores/auth'
+import { useRouter } from 'vue-router'
 
-// 数据模型定义 (前端对应后端的 Schema)
+const authStore = useAuthStore()
+const router = useRouter()
+
+interface DashboardStats {
+  todayFocusSeconds: number
+  totalAppsTracked: number
+  mostUsedAppToday: string | null
+  thisWeekLifetimeSeconds: number
+}
+
 interface AppSummary {
-  id: number
   last_seen_end_at: string
   total_lifetime_seconds: number
   total_focus_time_seconds: number
@@ -115,15 +126,9 @@ interface ProcessSession {
   total_lifetime_seconds: number
 }
 
-// 数据状态定义
-const username = ref('Admin') //应该从Token或用户信息接口获取
+const username = ref(authStore.username || 'User')
 
-const stats = ref<{
-  todayFocusSeconds: number
-  totalAppsTracked: number
-  mostUsedAppToday: string | null
-  thisWeekLifetimeSeconds: number
-}>({
+const stats = ref<DashboardStats>({
   todayFocusSeconds: 0,
   totalAppsTracked: 0,
   mostUsedAppToday: null,
@@ -133,7 +138,6 @@ const stats = ref<{
 const topApps = ref<WatchedApplication[]>([])
 const recentActivities = ref<ProcessSession[]>([])
 
-// 辅助函数
 const formatDuration = (totalSeconds: number): string => {
   if (totalSeconds < 60) return `${Math.round(totalSeconds)}秒`
   const hours = Math.floor(totalSeconds / 3600)
@@ -144,37 +148,34 @@ const formatDuration = (totalSeconds: number): string => {
   return result.trim() || '0分钟'
 }
 
-// API 调用逻辑
 const fetchData = async () => {
+  if (!authStore.isAuthenticated) {
+    router.push('/login')
+    return
+  }
+
   try {
-    // 完成 Promise.all 的调用
     const [statsRes, appsRes, activityRes] = await Promise.all([
-      fetch('/api/dashboard/stats'),
-      fetch('/api/dashboard/apps?sort_by=focus_time'),
-      fetch('/api/dashboard/recent-activity?limit=5'),
+      request.get('/dashboard/stats'),
+      request.get('/dashboard/apps?sort_by=focus_time'),
+      request.get('/dashboard/recent-activity?limit=10'),
     ])
 
-    if (!statsRes.ok || !appsRes.ok || !activityRes.ok) {
-      throw new Error('一个或多个网络响应失败')
-    }
+    // --- 2. 这里的核心修改：使用 'unknown' 作为中间层进行类型断言 ---
+    // 解释：因为我们在 request.ts 的拦截器里修改了返回值（去掉了外层的 data 包装），
+    // 但 TS 类型定义可能还认为是 AxiosResponse。
+    // 使用 `as unknown as Type` 是最稳妥的告诉 TS "我知道我在做什么，这就是这个数据类型" 的方法。
 
-    const statsData = await statsRes.json()
-    const appsData = await appsRes.json()
-    const activityData = await activityRes.json()
-
-    stats.value = statsData
-    topApps.value = appsData
-    recentActivities.value = activityData
+    stats.value = statsRes as unknown as DashboardStats
+    topApps.value = appsRes as unknown as WatchedApplication[]
+    recentActivities.value = activityRes as unknown as ProcessSession[]
   } catch (error) {
     console.error('无法加载仪表盘数据:', error)
-    // 这里可以设置一个全局的错误状态，并在 UI 上显示
   }
 }
 
-// 生命周期钩子
 onMounted(() => {
   fetchData()
-  console.log('Dashboard mounted. Fetching data...')
 })
 </script>
 

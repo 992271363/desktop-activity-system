@@ -3,11 +3,13 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from . import models, schemas, auth, database
+from .routers import dashboard
 
 # 初始化数据库表
 models.Base.metadata.create_all(bind=database.engine) 
 
 app = FastAPI()
+app.include_router(dashboard.router)
 
 #智能同步接口(采用手动事务控制)
 @app.post("/sync/sessions/", status_code=status.HTTP_201_CREATED, tags=["Sync"])

@@ -6,7 +6,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 1.5rem; /* 再次减小页面边距，为容器腾出更多垂直空间 */
+  padding: 1.5rem;
 }
 
 .auth-container {
@@ -22,7 +22,7 @@
   padding: 25px 40px;
   box-sizing: border-box;
 
-  /* ✅ 关键：移除了 max-height 和 overflow-y。我们不再需要备用方案！ */
+
 }
 
 .form-section {
@@ -38,26 +38,26 @@
 }
 
 .subtitle {
-  font-size: 0.95rem; /* 减小副标题字号 */
+  font-size: 0.95rem; 
   margin-bottom: 20px;
-  color: #d1d5db; /* 使用一个更柔和的灰色 */
+  color: #d1d5db; 
 }
 
 .form-group {
-  margin-bottom: 14px; /* ✨ 极限压缩：表单项间距 */
+  margin-bottom: 14px; 
   text-align: left;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 5px; /* ✨ 极限压缩：标签与输入框间距 */
-  font-size: 0.9rem; /* 减小标签字号 */
+  margin-bottom: 5px; 
+  font-size: 0.9rem; 
   font-weight: 500;
 }
 
 .form-group input {
   width: 100%;
-  padding: 11px 12px; /* ✨ 极限压缩：输入框垂直内边距 */
+  padding: 11px 12px; 
   font-size: 1rem;
   border-radius: 8px;
   box-sizing: border-box;
@@ -71,7 +71,7 @@
   color: #cccccc;
 }
 
-/* 移除不必要的 form-actions 容器，为登录页节省空间 */
+
 .form-actions {
   display: none;
 }
@@ -79,7 +79,7 @@
 .submit-btn {
   width: 100%;
   padding: 12px;
-  margin-top: 8px; /* ✨ 极限压缩：与上方元素的间距 */
+  margin-top: 8px; 
   font-size: 16px;
   font-weight: 600;
   color: #fff;
@@ -95,7 +95,7 @@
 }
 
 .switch-auth {
-  margin-top: 18px; /* ✨ 极限压缩：与下方元素的间距 */
+  margin-top: 18px; 
 }
 
 .switch-auth p {
