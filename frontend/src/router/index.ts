@@ -18,6 +18,12 @@ const router = createRouter({
       name: 'register',
       component: () => import('@/views/RegisterView.vue'),
     },
+        {
+      // :pathMatch(.*)* 是 Vue Router 4 的固定写法，匹配所有剩余路径
+      path: '/:pathMatch(.*)*', 
+      name: 'NotFound',
+      component: () => import('@/views/NotFound.vue'),
+    },
   ],
 })
 
