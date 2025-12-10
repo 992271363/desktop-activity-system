@@ -36,7 +36,8 @@ def get_dashboard_stats(
     most_used = db.query(
         models.ServerWatchedApplication.executable_name,
         func.sum(models.ServerProcessSession.total_focus_seconds).label("today_focus")
-    ).join(models.ServerAppUsageSummary)\
+    ).select_from(models.ServerWatchedApplication)\
+     .join(models.ServerAppUsageSummary)\
      .join(models.ServerProcessSession)\
      .filter(models.ServerWatchedApplication.user_id == current_user.id)\
      .filter(models.ServerProcessSession.session_start_time >= today_start)\
@@ -45,7 +46,6 @@ def get_dashboard_stats(
      .first()
     
     most_used_app_name = most_used[0] if most_used else "暂无数据"
-
     # 4. 本周总运行时长
     week_start = today_start - timedelta(days=today_start.weekday()) # 本周一
     week_lifetime = db.query(func.sum(models.ServerProcessSession.total_lifetime_seconds))\
