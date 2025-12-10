@@ -283,36 +283,36 @@ onMounted(() => {
   list-style: none;
   padding: 0;
   
-  max-height: 500px; /* 限制最大高度，你可以根据需要调整这个数值 */
-  overflow-y: auto;  /* 内容超出时允许垂直滚动 */
-  padding-right: 10px; /* 右侧留出一点空隙给滚动条，防止文字贴边 */
+  max-height: 450px;   /* 限制高度 */
+  overflow-y: auto;   /* 超出部分开启垂直滚动 */
+  padding-right: 10px;   /* 给滚动条留出一点呼吸空间，防止文字紧贴滚动条 */
 }
 
-/* --- 新增：美化滚动条 --- */
-.app-list,
+/* 1. 滚动条整体宽度 */
+.app-list::-webkit-scrollbar,
 .activity-feed::-webkit-scrollbar {
-  width: 6px; /* 滚动条宽度变细 */
+  width: 6px;
 }
 
-/* 滚动条轨道（背景） */
-.app-list,
+/* 2. 滚动条轨道 (背景) */
+.app-list::-webkit-scrollbar-track,
 .activity-feed::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 3px;
 }
 
-/* 滚动条滑块 */
-.app-list,
+/* 3. 滚动条滑块 (那个动的小条) */
+.app-list::-webkit-scrollbar-thumb,
 .activity-feed::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2); /* 半透明白色 */
+  background: rgba(255, 255, 255, 0.2); /* 平时是半透明 */
   border-radius: 3px;
   transition: background 0.2s;
 }
 
-/* 鼠标悬停在滑块上时 */
-.app-list,
+/* 4. 鼠标悬停在滑块上时变亮 */
+.app-list::-webkit-scrollbar-thumb:hover,
 .activity-feed::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.4); /* 变亮一点 */
+  background: rgba(255, 255, 255, 0.4);
 }
 
 .app-item,
