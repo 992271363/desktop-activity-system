@@ -1,0 +1,17 @@
+{
+  "selected_dir": "",
+  "output_file": "",
+  "max_files": 1000,
+  "file_selections": {
+    ".py": true,
+    ".vue": true,
+    ".ts": true,
+    ".js": false,
+    ".json": false,
+    ".html": false,
+    ".css": false,
+    ".conf": false,
+    "Dockerfile": true,
+    "docker-compose.yml": true
+  }
+}

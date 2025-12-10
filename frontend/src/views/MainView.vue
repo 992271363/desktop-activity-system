@@ -7,7 +7,7 @@
 
     <div class="stats-grid">
       <div class="stat-card">
-        <h3>今日专注时长</h3>
+        <h3>今日焦点时长</h3>
         <p>{{ formatDuration(stats.todayFocusSeconds) }}</p>
         <span class="card-icon"><i class="fas fa-clock"></i></span>
       </div>
@@ -34,7 +34,7 @@
         <div class="app-list">
           <div v-for="app in topApps" :key="app.id" class="app-item">
             <div class="app-info">
-              <span class="app-name">{{ app.executable_name }}</span>
+              <span class="app-name">{{ formatAppName(app.executable_name) }}</span>
               <span class="app-last-seen"
                 >最后使用: {{ new Date(app.summary.last_seen_end_at).toLocaleString() }}</span
               >
@@ -99,6 +99,10 @@ import { useRouter } from 'vue-router'
 const authStore = useAuthStore()
 const router = useRouter()
 
+const formatAppName = (name: string): string => {
+  return name.replace(/\.exe$/i, '')
+} 
+
 interface DashboardStats {
   todayFocusSeconds: number
   totalAppsTracked: number
@@ -139,12 +143,22 @@ const topApps = ref<WatchedApplication[]>([])
 const recentActivities = ref<ProcessSession[]>([])
 
 const formatDuration = (totalSeconds: number): string => {
-  if (totalSeconds < 60) return `${Math.round(totalSeconds)}秒`
-  const hours = Math.floor(totalSeconds / 3600)
+  if (totalSeconds < 60) {
+    return `${Math.round(totalSeconds)}秒`
+  }
+  const days = Math.floor(totalSeconds / (24 * 3600))
+  const hours = Math.floor((totalSeconds % (24 * 3600)) / 3600)
   const minutes = Math.floor((totalSeconds % 3600) / 60)
   let result = ''
+  if (days > 0) {
+    result += `${days}天 `
+    if (hours > 0) result += `${hours}小时 `
+    return result.trim()
+  }
+
   if (hours > 0) result += `${hours}小时 `
   if (minutes > 0) result += `${minutes}分钟`
+  
   return result.trim() || '0分钟'
 }
 
@@ -161,10 +175,6 @@ const fetchData = async () => {
       request.get('/dashboard/recent-activity?limit=10'),
     ])
 
-    // --- 2. 这里的核心修改：使用 'unknown' 作为中间层进行类型断言 ---
-    // 解释：因为我们在 request.ts 的拦截器里修改了返回值（去掉了外层的 data 包装），
-    // 但 TS 类型定义可能还认为是 AxiosResponse。
-    // 使用 `as unknown as Type` 是最稳妥的告诉 TS "我知道我在做什么，这就是这个数据类型" 的方法。
 
     stats.value = statsRes as unknown as DashboardStats
     topApps.value = appsRes as unknown as WatchedApplication[]

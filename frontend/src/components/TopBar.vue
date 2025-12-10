@@ -1,7 +1,8 @@
 <template>
   <header class="top-bar">
     <div class="top-bar-content">
-      <div class="logo-area">
+      <!-- 左侧：Logo 和标题 (保持不变) -->
+      <div class="logo-area" @click="goHome">
         <svg
           width="28"
           height="28"
@@ -34,84 +35,195 @@
         <span class="app-name">桌面活动管理系统</span>
       </div>
 
-      <!-- 右侧：操作区 -->
+      <!-- 右侧：功能操作区 (修改部分) -->
       <div class="actions-area">
-        <div class="user-avatar">
-          <span>A</span>
+        
+        <!-- 场景1：如果已登录，显示用户名 + 下拉菜单 -->
+        <div v-if="authStore.isAuthenticated" class="user-menu-container">
+          <div class="user-trigger">
+            <span class="username-text">Hi, {{ authStore.username }}</span>
+            <i class="fas fa-chevron-down arrow-icon"></i>
+          </div>
+          
+          <!-- 悬停或点击后展开的菜单 -->
+          <div class="dropdown-menu">
+            <div class="menu-item logout-btn" @click="handleLogout">
+              <i class="fas fa-sign-out-alt"></i> 退出登录
+            </div>
+          </div>
         </div>
+
+        <!-- 场景2：如果未登录，显示登录按钮 -->
+        <div v-else class="guest-actions">
+           <!-- 如果当前已经是登录页，按钮可以置灰或者隐藏，这里做成高亮跳转 -->
+           <button class="login-btn" @click="router.push('/login')">
+             立即登录
+           </button>
+        </div>
+
       </div>
     </div>
   </header>
 </template>
 
 <script setup lang="ts">
-// 目前不需要脚本逻辑
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+
+const router = useRouter()
+const authStore = useAuthStore()
+
+// 点击 Logo 回首页
+const goHome = () => {
+  router.push('/')
+}
+
+// 退出登录逻辑
+const handleLogout = () => {
+  // 1. 调用 Pinia 的 logout 清除状态
+  authStore.logout()
+  // 2. 强制跳转回登录页
+  router.push('/login')
+}
 </script>
 
 <style scoped>
-/* 顶栏容器，固定在顶部，全宽，应用毛玻璃效果 */
+/* 保持原有的 TopBar 基础样式 */
 .top-bar {
-  position: fixed; /* 固定在视口顶部 */
+  position: fixed;
   top: 0;
   left: 0;
   width: 100%;
-  height: 64px; /* 固定高度，为下方内容区留出空间 */
-  z-index: 1000; /* 确保在最上层 */
-
-  /* 核心：毛玻璃背景 */
-  background-color: rgba(26, 32, 44, 0.65); /* 半透明深蓝灰色背景 */
+  height: 64px;
+  z-index: 1000;
+  background-color: rgba(26, 32, 44, 0.8); /*稍微加深一点背景，提升菜单对比度*/
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1); /* 底部细线，增加质感 */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* 顶栏内容区，限制最大宽度并居中，与仪表盘内容对齐 */
 .top-bar-content {
   max-width: 1600px;
   height: 100%;
   margin: 0 auto;
-  padding: 0 2rem; /* 两边留出间距，与 MainView 对应 */
+  padding: 0 2rem;
   display: flex;
-  justify-content: space-between; /* 两端对齐 */
-  align-items: center; /* 垂直居中 */
+  justify-content: space-between;
+  align-items: center;
 }
 
-/* 左侧 Logo 区域 */
 .logo-area {
   display: flex;
   align-items: center;
-  gap: 0.75rem; /* 图标和文字的间距 */
+  gap: 0.75rem;
+  cursor: pointer;
 }
 
 .app-name {
   font-size: 1.15rem;
   font-weight: 600;
-  color: #f7fafc; /* 亮白色 */
+  color: #f7fafc;
 }
 
-/* 右侧操作区域 */
+/* --- 新增/修改的样式 --- */
+
 .actions-area {
   display: flex;
   align-items: center;
-  gap: 1rem;
 }
 
-/* 用户头像 */
-.user-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background-color: #3182ce; /* 蓝色 */
-  display: flex;
-  justify-content: center;
-  align-items: center;
+/* 1. 未登录状态的按钮 */
+.login-btn {
+  background-color: #4299e1;
+  color: white;
+  border: none;
+  padding: 0.5rem 1.5rem;
+  border-radius: 6px;
   font-weight: 600;
-  color: #fff;
   cursor: pointer;
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  transition: transform 0.2s;
+  transition: background-color 0.2s;
 }
-.user-avatar:hover {
-  transform: scale(1.1);
+.login-btn:hover {
+  background-color: #3182ce;
+}
+
+/* 2. 已登录状态的下拉菜单容器 */
+.user-menu-container {
+  position: relative; /* 关键：为了下拉菜单的绝对定位 */
+  height: 64px; /* 撑满高度，方便鼠标移动 */
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+/* 触发区：用户名 + 箭头 */
+.user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  color: #e2e8f0;
+  transition: color 0.2s;
+}
+
+.user-trigger:hover {
+  color: #fff;
+}
+
+.arrow-icon {
+  font-size: 0.8rem;
+  transition: transform 0.3s;
+}
+
+/* 下拉菜单本体 */
+.dropdown-menu {
+  position: absolute;
+  top: 60px; /* 在 Header 下方 */
+  right: 0;
+  width: 160px;
+  background-color: #2d3748; /* 深色背景 */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  
+  /* 默认隐藏 */
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition: all 0.2s ease-in-out;
+  overflow: hidden;
+}
+
+/* 交互逻辑：鼠标悬停在容器上时，显示菜单 */
+.user-menu-container:hover .dropdown-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* 鼠标悬停时箭头旋转 */
+.user-menu-container:hover .arrow-icon {
+  transform: rotate(180deg);
+}
+
+/* 菜单项 */
+.menu-item {
+  padding: 0.75rem 1rem;
+  color: #e2e8f0;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+/* 退出登录按钮特有样式 */
+.logout-btn {
+  color: #fc8181; /* 红色文字示警 */
+}
+
+.logout-btn:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
 }
 </style>

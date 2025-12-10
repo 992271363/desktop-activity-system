@@ -13,6 +13,27 @@ from services import ProcessMonitorWorker, FocusTimeWorker, get_process_list
 from UiFile.Ui_PidSelect import Ui_desktopActivitySystem
 from UiFile.Ui_ProcListDialog import Ui_ProcList
 
+def format_seconds_to_text(seconds: int) -> str:
+    if seconds < 60:
+        return f"{seconds} 秒"
+    
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    d, h = divmod(h, 24)
+    
+    text = ""
+    if d > 0:
+        text += f"{int(d)}天 "
+    if h > 0:
+        text += f"{int(h)}小时 "
+    if m > 0:
+        text += f"{int(m)}分钟 "
+    
+    if d == 0 and h == 0: 
+        text += f"{int(s)}秒"
+        
+    return text.strip()
+
 class Mywindow(QMainWindow, Ui_desktopActivitySystem):
     request_stop_monitor = Signal()
     request_stop_focus = Signal()
@@ -200,7 +221,10 @@ class Mywindow(QMainWindow, Ui_desktopActivitySystem):
             db.close()
 
     def on_focus_time_updated(self, seconds: int):
-        self.label_focus_time_show.setText(f" {seconds} 秒")
+        # 使用上面的格式化函数
+        time_text = format_seconds_to_text(seconds)
+        self.label_focus_time_show.setText(time_text)
+
 
     def closeEvent(self, event):
         print("[Main Window] 关闭事件触发...")
