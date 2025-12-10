@@ -225,3 +225,6 @@ tree*.txt
 #VueWeb
 node_modules/
 dist/
+
+#backFile
+*.back

@@ -1,21 +1,20 @@
 import os
 import psutil
 import datetime
+import time
 import win32gui
 import win32process
-from PySide6.QtCore import QObject, Signal, QTimer
-from typing import List, TypedDict
+from PySide6.QtCore import QObject, Signal, QMutex, QMutexLocker
+from typing import List, Dict, TypedDict
 
-
+# --- 基础类型 ---
 class ProcessInfo(TypedDict):
     pid: int
     name: str
     exe: str
 
+# --- 获取进程列表 (保留原逻辑) ---
 def get_process_list() -> List[ProcessInfo]:
-    """
-    获取当前系统中可用的进程列表。
-    """
     attrs = ['pid', 'name', 'exe']
     process_data: List[ProcessInfo] = []
     path_separator = os.sep
@@ -26,7 +25,6 @@ def get_process_list() -> List[ProcessInfo]:
                 'name': proc.info['name'],
                 'exe': proc.info['exe'] or 'N/A'
             }
-            # 过滤掉没有可执行文件路径、不包含路径分隔符或系统核心进程
             if not proc_info['exe'] or path_separator not in proc_info['exe'] or proc_info['pid'] in [0, 4]:
                 continue
             process_data.append(proc_info)
@@ -34,109 +32,130 @@ def get_process_list() -> List[ProcessInfo]:
             pass
     return process_data
 
-def kill_for_pid(pid: int):
-    """
-    根据 PID 终止进程（如果权限允许）。
-    """
-    if psutil.pid_exists(pid):
-        try:
-            proc = psutil.Process(pid)
-            username = proc.username()
-            print(f"尝试终止进程 '{proc.name()}' (PID: {pid})，由 '{username}' 执行")
-            
-            is_system_process = False
-            if os.name == 'nt':
-                if username.upper().startswith(('NT AUTHORITY\\', 'LOCAL SERVICE', 'NETWORK SERVICE')):
-                    is_system_process = True
-            elif username == 'root':
-                is_system_process = True
-
-            if is_system_process:
-                print(f"警告：不允许终止系统进程 '{proc.name()}'。")
-                return
-
-            print(f"正在终止进程 '{proc.name()}'...")
-            proc.kill()
-        except psutil.NoSuchProcess:
-            print(f"终止失败：进程 {pid} 已不存在。")
-        except psutil.AccessDenied:
-            print(f"终止失败：权限不足，无法终止进程 {pid}。")
-
-class ProcessMonitorWorker(QObject):
-    process_terminated = Signal(int, datetime.datetime)
-    error_occurred = Signal(str)
-    finished = Signal()
-
-    def __init__(self, pid_to_watch):
-        super().__init__()
-        self._pid = pid_to_watch
-        self._timer = None
-
-    def start_monitoring(self):
-        if not psutil.pid_exists(self._pid):
-            self.error_occurred.emit(f"进程 {self._pid} 在监视开始前就不存在。")
-            self.finished.emit()
-            return
-
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._check_pid_status)
-        self._timer.start(1000)
-        print(f"[Process Monitor] QTimer 已启动，监控 PID: {self._pid}")
-
-    def _check_pid_status(self):
-        if not psutil.pid_exists(self._pid):
-            print(f"[Process Monitor] 检测到 PID {self._pid} 已终止。")
-            self.process_terminated.emit(self._pid, datetime.datetime.now())
-            self.stop()
-
-    def stop(self):
-        if self._timer and self._timer.isActive():
-            self._timer.stop()
-            print(f"[Process Monitor] PID {self._pid} 的监控定时器已停止。")
-        self.finished.emit()
-
-
-class FocusTimeWorker(QObject):
-    finished = Signal()
-    time_updated = Signal(int)
-
-    def __init__(self, pid: int):
-        super().__init__()
-        self._pid = pid
-        self._timer = None
+# --- 全局监控 Worker ---
+class ActiveSession:
+    def __init__(self, pid, exe_name, start_time):
+        self.pid = pid
+        self.exe_name = exe_name
+        self.start_time = start_time
+        self.focus_seconds = 0
         self.focus_details = {}
-        self.total_focus_seconds = 0
+        self.is_focused = False
 
-    def start_focus_check(self):
-        self._timer = QTimer(self)
-        self._timer.timeout.connect(self._check_focus)
-        self._timer.start(1000)
-        print(f"[Focus Worker] QTimer 已启动，为 PID {self._pid} 检查焦点...")
+class GlobalMonitorWorker(QObject):
+    status_updated = Signal(dict)
+    session_finished = Signal(str, int)
+    finished = Signal()
 
-    def _check_focus(self):
-        try:
-            if not psutil.pid_exists(self._pid):
-                print(f"[Focus Worker] 监视的 PID {self._pid} 已消失，停止计时。")
-                self.stop()
-                return
+    def __init__(self, watched_apps_list: List[str]):
+        super().__init__()
+        self._target_apps = set(app.lower() for app in watched_apps_list)
+        self._running = True
+        self._mutex = QMutex()
+        self._active_sessions: Dict[int, ActiveSession] = {}
 
-            fg_window = win32gui.GetForegroundWindow()
-            _, fg_pid = win32process.GetWindowThreadProcessId(fg_window)
-
-            if fg_pid == self._pid:
-                window_title = win32gui.GetWindowText(fg_window) or "[无标题]"
-                self.focus_details[window_title] = self.focus_details.get(window_title, 0) + 1
-                self.total_focus_seconds += 1
-                self.time_updated.emit(self.total_focus_seconds)
-        except Exception as e:
-            print(f"[Focus Worker] 检查焦点时出错: {e}")
-            self.stop()
+    def update_watch_list(self, new_list: List[str]):
+        with QMutexLocker(self._mutex):
+            self._target_apps = set(app.lower() for app in new_list)
 
     def stop(self):
-        if self._timer and self._timer.isActive():
-            self._timer.stop()
-            print(f"[Focus Worker] PID {self._pid} 的焦点计时器已停止。")
+        self._running = False
+
+    def run(self):
+        print("[Global Monitor] 服务启动...")
+        while self._running:
+            try:
+                self._check_processes_lifecycle_nonblocking()
+                self._check_focus_nonblocking()
+                self._emit_status()
+
+                # 灵敏等待，每 0.1 秒检查一次是否停止，总共 1 秒
+                for _ in range(10):
+                    if not self._running:
+                        break
+                    time.sleep(0.1)
+
+            except Exception as e:
+                print(f"[Global Monitor] 异常: {e}")
+                time.sleep(0.1)
+
+        self._force_close_all()
         self.finished.emit()
 
-    def get_focus_details(self) -> dict:
-        return self.focus_details
+    def _check_processes_lifecycle_nonblocking(self):
+        current_pids = set()
+        for proc in psutil.process_iter(['pid', 'name', 'exe']):
+            if not self._running:
+                break
+            try:
+                if not proc.info['exe']:
+                    continue
+                p_name = proc.info['name']
+                p_lower = p_name.lower()
+                p_pid = proc.info['pid']
+                if p_lower in self._target_apps:
+                    current_pids.add(p_pid)
+                    if p_pid not in self._active_sessions:
+                        self._active_sessions[p_pid] = ActiveSession(p_pid, p_name, datetime.datetime.now())
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue
+
+        active_pids = list(self._active_sessions.keys())
+        for pid in active_pids:
+            if pid not in current_pids:
+                self._save_session(self._active_sessions[pid])
+                del self._active_sessions[pid]
+
+    def _check_focus_nonblocking(self):
+        if not self._running:
+            return
+        try:
+            fg_window = win32gui.GetForegroundWindow()
+            if not fg_window: return
+            _, fg_pid = win32process.GetWindowThreadProcessId(fg_window)
+            if fg_pid in self._active_sessions:
+                session = self._active_sessions[fg_pid]
+                session.is_focused = True
+                session.focus_seconds += 1
+                window_title = win32gui.GetWindowText(fg_window) or "未知窗口"
+                session.focus_details[window_title] = session.focus_details.get(window_title, 0) + 1
+        except Exception:
+            pass
+
+    def _save_session(self, session: ActiveSession):
+        from local_database import SessionLocal
+        from tracking_service import record_process_session
+        end_time = datetime.datetime.now()
+        if (end_time - session.start_time).total_seconds() < 2: return
+        db = SessionLocal()
+        try:
+            record_process_session(db=db,
+                                   executable_name=session.exe_name,
+                                   start_time=session.start_time,
+                                   end_time=end_time,
+                                   focus_details=session.focus_details)
+            self.session_finished.emit(session.exe_name, int((end_time - session.start_time).total_seconds()))
+        except Exception as e:
+            print(f"[DB Save Error] {e}")
+        finally:
+            db.close()
+
+    def _force_close_all(self):
+        for pid, session in self._active_sessions.items():
+            self._save_session(session)
+        self._active_sessions.clear()
+
+    def _emit_status(self):
+        status_data = {}
+        now = datetime.datetime.now()
+        for pid, session in self._active_sessions.items():
+            name = session.exe_name
+            runtime_seconds = int((now - session.start_time).total_seconds())
+            status_data[name] = {
+                "pid": pid,
+                "focus": session.focus_seconds,
+                "runtime_seconds": runtime_seconds,
+                "start_str": session.start_time.strftime("%H:%M:%S"),
+                "is_focused": session.is_focused
+            }
+        self.status_updated.emit(status_data)
