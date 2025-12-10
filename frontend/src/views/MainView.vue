@@ -283,23 +283,26 @@ onMounted(() => {
   list-style: none;
   padding: 0;
   
-  max-height: 600px; /* 限制最大高度，你可以根据需要调整这个数值 */
+  max-height: 500px; /* 限制最大高度，你可以根据需要调整这个数值 */
   overflow-y: auto;  /* 内容超出时允许垂直滚动 */
   padding-right: 10px; /* 右侧留出一点空隙给滚动条，防止文字贴边 */
 }
 
 /* --- 新增：美化滚动条 --- */
+.app-list,
 .activity-feed::-webkit-scrollbar {
   width: 6px; /* 滚动条宽度变细 */
 }
 
 /* 滚动条轨道（背景） */
+.app-list,
 .activity-feed::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 3px;
 }
 
 /* 滚动条滑块 */
+.app-list,
 .activity-feed::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2); /* 半透明白色 */
   border-radius: 3px;
@@ -307,6 +310,7 @@ onMounted(() => {
 }
 
 /* 鼠标悬停在滑块上时 */
+.app-list,
 .activity-feed::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.4); /* 变亮一点 */
 }
