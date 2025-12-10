@@ -73,7 +73,7 @@
           <li v-for="activity in recentActivities" :key="activity.id" class="feed-item">
             <div class="feed-icon"><i class="fas fa-history"></i></div>
             <div class="feed-content">
-              <strong>{{ activity.process_name }}</strong>
+              <strong>{{ formatAppName(activity.process_name) }}</strong>
               <small>持续了 {{ formatDuration(activity.total_lifetime_seconds) }}</small>
               <small
                 >{{ new Date(activity.session_start_time).toLocaleTimeString() }} -
@@ -96,12 +96,12 @@ import request from '@/utils/request'
 import { useAuthStore } from '@/stores/auth'
 import { useRouter } from 'vue-router'
 
-const authStore = useAuthStore()
-const router = useRouter()
-
 const formatAppName = (name: string): string => {
   return name.replace(/\.exe$/i, '')
 } 
+
+const authStore = useAuthStore()
+const router = useRouter()
 
 interface DashboardStats {
   todayFocusSeconds: number
