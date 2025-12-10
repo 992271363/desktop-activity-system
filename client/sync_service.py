@@ -1,76 +1,121 @@
-import os
-import requests
-from dotenv import load_dotenv
-from typing import List, Dict, Any, Optional, Tuple
-from enum import Enum
 
-load_dotenv()
-API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1/api")
+from PySide6.QtCore import QObject, Signal, Slot, QTimer, Qt
+from sqlalchemy.orm import joinedload, Session
+from local_database import SessionLocal
+from local_models import FocusActivity
+from client_api import send_data_to_api
+from typing import List
 
-#定义一个清晰的登录状态枚举
-class LoginStatus(Enum):
-    SUCCESS = 0
-    INVALID_CREDENTIALS = 1 # 用户名或密码无效
-    NETWORK_ERROR = 2       # 网络问题，如无法连接、超时
-    UNKNOWN_ERROR = 3       # 其他未知错误
-
-def api_login(username: str, password: str) -> Tuple[LoginStatus, Optional[str]]:
-    """
-    调用后端接口进行登录，并返回详细的状态。
-
-    Returns:
-        一个元组 (LoginStatus, token)，其中 token 只在成功时有效。
-    """
-    clean_base_url = API_BASE_URL.rstrip('/')
-    login_url = f"{clean_base_url}/auth/token"
-
+def get_and_prepare_sync_data():
+    db = SessionLocal()
     try:
-        response = requests.post(
-            login_url,
-            data={"username": username, "password": password},
-            timeout=10
-        )
-        # 检查是否为 HTTP 错误 (4xx, 5xx)
-        response.raise_for_status() 
+        activities_to_sync = db.query(FocusActivity).options(
+            joinedload(FocusActivity.session)
+        ).filter(FocusActivity.synced == False).all()
+        if not activities_to_sync:
+            return [], []
+        sessions_map = {}
+        for activity in activities_to_sync:
+            session_id = activity.session_id
+            if session_id not in sessions_map:
+                sessions_map[session_id] = {
+                    "process_name": activity.session.process_name,
+                    "session_start_time": activity.session.session_start_time.isoformat(),
+                    "session_end_time": activity.session.session_end_time.isoformat(),
+                    "total_lifetime_seconds": activity.session.total_focus_seconds,
+                    "activities": []
+                }
 
-        access_token = response.json().get("access_token")
-        if access_token:
-            return (LoginStatus.SUCCESS, access_token)
-        else:
-            # 成功响应但没有 token，视为未知错误
-            print(f"登录API响应成功，但响应体中缺少 'access_token': {response.text}")
-            return (LoginStatus.UNKNOWN_ERROR, None)
+            sessions_map[session_id]["activities"].append({
+                "window_title": activity.window_title,
+                "focus_duration_seconds": activity.focus_duration_seconds
+            })
 
-    #异常处理逻辑
-    except requests.exceptions.HTTPError as e:
-        # 特别处理 HTTP 错误
-        # FastAPI 在用户名密码错误时，默认返回 400 Bad Request
-        if e.response.status_code == 400 or e.response.status_code == 401:
-            # 这是明确的凭证错误
-            return (LoginStatus.INVALID_CREDENTIALS, None)
-        else:
-            # 其他 HTTP 错误（如 404, 500）也归为网络或服务器问题
-            print(f"登录API请求失败，HTTP 错误: {e}")
-            return (LoginStatus.NETWORK_ERROR, None)
-            
-    except requests.exceptions.RequestException as e:
-        # 处理所有其他网络相关的异常 (连接超时, DNS错误, 连接被拒绝等)
-        print(f"登录API请求失败，底层网络错误: {e}")
-        return (LoginStatus.NETWORK_ERROR, None)
+        data_to_send = list(sessions_map.values())
+        print(f"[Sync Util] 发现 {len(data_to_send)} 个会话包含未同步数据，准备上传...")
+        return data_to_send, activities_to_sync
+    finally:
+        db.close()
 
-def send_data_to_api(data_list: List[Dict[str, Any]], endpoint: str, token: str) -> bool:
-    if not data_list:
-        return True
-
-    clean_base_url = API_BASE_URL.rstrip('/')
-    target_url = f"{clean_base_url}/{endpoint.lstrip('/')}"
-    headers = {"Authorization": f"Bearer {token}"}
-
+def mark_activities_as_synced(activities: List[FocusActivity]):
+    if not activities:
+        return
+    db = SessionLocal()
     try:
-        response = requests.post(target_url, json=data_list, headers=headers, timeout=15)
-        response.raise_for_status()
-        print(f"成功发送 {len(data_list)} 条数据到 {endpoint}")
-        return True
-    except requests.exceptions.RequestException as e:
-        print(f"发送数据到 {endpoint} 失败: {e}")
-        return False
+        activity_ids = [activity.id for activity in activities]
+        db.query(FocusActivity).filter(FocusActivity.id.in_(activity_ids)).update({"synced": True})
+        db.commit()
+        print(f"[Sync Util] 已将 {len(activity_ids)} 条焦点活动记录标记为已同步。")
+    except Exception as e:
+        print(f"[Sync Util] 标记同步状态时出错: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+class ApiSyncWorker(QObject):
+    finished = Signal()
+    status_updated = Signal(str)
+
+    def __init__(self, parent_window, interval_seconds: int = 60):
+        super().__init__()
+        self.main_window = parent_window
+        self.interval = interval_seconds * 1000
+        self._timer = None
+        self._running = False
+
+    @Slot()  # 确保这是个槽（在目标线程执行）
+    def start_service(self):
+        """在 worker 线程中被调用，创建并启动 QTimer（QTimer 必须在这里创建）"""
+        print(f"[Sync Service] QTimer 服务已在后台线程启动，每 {self.interval // 1000} 秒检查一次。")
+        self._running = True
+        # 不要把 parent 设为主线程对象，用 None 或 self（self 已在目标线程）
+        self._timer = QTimer()
+        self._timer.setInterval(self.interval)
+        self._timer.timeout.connect(self.perform_sync_check)
+        self._timer.start()
+        # 立即触发一次检查（可选）
+        self.perform_sync_check()
+
+    @Slot()
+    def perform_sync_check(self):
+        # 早退条件：如果已经停止则不执行
+        if not self._running:
+            return
+        print("\n--- [Sync Service] QTimer 触发新一轮后台同步检查 ---")
+        token = getattr(self.main_window, "token", None)
+        if not token:
+            self.status_updated.emit("未登录，跳过后台同步。")
+            return
+
+        data_to_send, activities_to_mark = get_and_prepare_sync_data()
+        if not data_to_send:
+            self.status_updated.emit("后台检查：数据已是最新。")
+        else:
+            self.status_updated.emit(f"后台发现 {len(data_to_send)} 个新会话，上传中...")
+            success = send_data_to_api(data_to_send, endpoint="/sync/sessions/", token=token)
+            if success:
+                mark_activities_as_synced(activities_to_mark)
+                self.status_updated.emit(f"后台成功同步 {len(data_to_send)} 个会话。")
+            else:
+                self.status_updated.emit("后台同步失败，将在下一周期重试。")
+
+    @Slot()  # 这个 stop 必须在 worker 线程中运行（通过 queued connection 调用）
+    def stop(self):
+        print("[Sync Service] 收到停止信号（slot），准备停止 QTimer ...")
+        # 标志位先关
+        self._running = False
+        # 在本线程安全停止 timer
+        if self._timer and self._timer.isActive():
+            try:
+                self._timer.stop()
+                print("[Sync Service] QTimer 已停止。")
+            except Exception as e:
+                print("[Sync Service] 停止定时器时异常:", e)
+        # 清理 timer 对象
+        if self._timer:
+            self._timer.deleteLater()
+            self._timer = None
+
+        # 告诉外界我们已经完成，触发 thread.quit()（由 main 端连接）
+        self.finished.emit()
