@@ -127,3 +127,30 @@ class ApiSyncWorker(QObject):
             self._timer.deleteLater()
             self._timer = None
         self.finished.emit()
+    @Slot()
+    def perform_sync_check(self):
+        if not self._running:
+            return
+            
+        token = getattr(self.main_window, "token", None)
+        if not token:
+            print("[Sync] 未登录，跳过。")
+            return
+        try:
+            data_to_send, activities_to_mark = get_and_prepare_sync_data()
+        except Exception as e:
+            print(f"[Sync] 读取数据出错: {e}")
+            return
+
+        if not data_to_send:
+            return
+
+        self.status_updated.emit(f"☁️ 正在上传 {len(data_to_send)} 条新记录...")
+
+        success = send_data_to_api(data_to_send, endpoint="/sync/sessions/", token=token)
+
+        if success:
+            mark_activities_as_synced(activities_to_mark)
+            self.status_updated.emit(f"✅ 同步成功 ({len(data_to_send)} 条已上传)")
+        else:
+            self.status_updated.emit("❌ 同步失败，网络超时或服务器错误")

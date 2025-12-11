@@ -17,7 +17,6 @@ from sync_service import ApiSyncWorker, get_and_prepare_sync_data, mark_activiti
 from client_api import send_data_to_api
 from UiFile.Ui_Main import Ui_desktopActivitySystem 
 from UiFile.Ui_ProcListDialog import Ui_ProcList
-from UiFile.sync_dialog import SyncDialog
 
 def format_seconds_to_text(seconds: int) -> str:
     if seconds < 60: return f"{seconds} 秒"
