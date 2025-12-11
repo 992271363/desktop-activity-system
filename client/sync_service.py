@@ -114,8 +114,16 @@ class ApiSyncWorker(QObject):
                 print("[Sync Service] 停止定时器时异常:", e)
         # 清理 timer 对象
         if self._timer:
-            self._timer.deleteLater()
-            self._timer = None
+        # 添加安全延迟，确保定时器完全停止
+            QTimer.singleShot(100, self._safe_delete_timer)
+        else:
+            self.finished.emit()
 
         # 告诉外界我们已经完成，触发 thread.quit()（由 main 端连接）
+    @Slot()
+    def _safe_delete_timer(self):
+        """确保在定时器完全停止后安全删除"""
+        if self._timer:
+            self._timer.deleteLater()
+            self._timer = None
         self.finished.emit()

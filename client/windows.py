@@ -17,6 +17,7 @@ from sync_service import ApiSyncWorker, get_and_prepare_sync_data, mark_activiti
 from client_api import send_data_to_api
 from UiFile.Ui_Main import Ui_desktopActivitySystem 
 from UiFile.Ui_ProcListDialog import Ui_ProcList
+from UiFile.sync_dialog import SyncDialog
 
 def format_seconds_to_text(seconds: int) -> str:
     if seconds < 60: return f"{seconds} 秒"
@@ -280,7 +281,20 @@ class Mywindow(QMainWindow, Ui_desktopActivitySystem):
         # 【关键修复】确保 Timer 停止后，Worker 发出 finished，Thread 才会退出
         self.sync_worker.finished.connect(self.sync_thread.quit)
         
+        self.sync_thread.finished.connect(self._on_sync_thread_finished)
+        
         self.sync_thread.start()
+
+    # 新增的清理方法
+    def _on_sync_thread_finished(self):
+        """同步线程完全停止后的清理工作"""
+        print("[MainWindow] 同步线程已安全停止")
+        if self.sync_worker:
+            self.sync_worker.deleteLater()
+            self.sync_worker = None
+        if self.sync_thread:
+            self.sync_thread.deleteLater()
+            self.sync_thread = None
     
     def run_immediate_sync(self):
         if not self.token: return
@@ -294,18 +308,27 @@ class Mywindow(QMainWindow, Ui_desktopActivitySystem):
 
     # --- 核心修复：优雅退出逻辑 ---
     def closeEvent(self, event):
+    # 先停止监控线程
         if self.monitor_worker and self.monitor_thread:
             self.monitor_worker.stop()
             self.monitor_thread.quit()
-            self.monitor_thread.wait(500)  # 最多 0.5s
+            if not self.monitor_thread.wait(1000):  # 等待1秒
+                print("监控线程停止超时，但继续关闭")
         
+        # 优雅停止同步线程
         if self.sync_worker and self.sync_thread:
+            # 1. 发出停止信号，但不强制退出
             self.request_stop_sync.emit()
-            self.sync_thread.quit()
-            self.sync_thread.wait(500)  # 最多 0.5s
-
+            
+            # 2. 给予合理时间让同步线程完成当前操作
+            if not self.sync_thread.wait(3000):  # 等待3秒让同步完成
+                print("同步线程正在完成最后操作，稍后自动退出")
+                
+            # 3. 不再强制退出，让线程自然结束
+            # 系统关闭时会自动清理资源
+        
+        # 4. 继续关闭主窗口
         super().closeEvent(event)
-
 # --- DialogWindow (保留你的全功能版本) ---
 class DialogWindow(QDialog, Ui_ProcList):
     def __init__(self, parent=None):

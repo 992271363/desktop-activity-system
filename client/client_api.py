@@ -67,7 +67,7 @@ def send_data_to_api(data_list: List[Dict[str, Any]], endpoint: str, token: str)
     headers = {"Authorization": f"Bearer {token}"}
 
     try:
-        response = requests.post(target_url, json=data_list, headers=headers, timeout=15)
+        response = requests.post(target_url, json=data_list, headers=headers, timeout=5) #可以调整超时时间
         response.raise_for_status()
         print(f"成功发送 {len(data_list)} 条数据到 {endpoint}")
         return True
