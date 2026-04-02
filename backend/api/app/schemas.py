@@ -22,6 +22,7 @@ class SyncProcessSession(BaseModel):
 # 用户相关的模型
 class UserBase(BaseModel):
     username: str
+    email: Optional[str] = None
 
 class UserCreate(UserBase): 
     password: str

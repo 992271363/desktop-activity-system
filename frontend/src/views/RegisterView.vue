@@ -57,9 +57,11 @@
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue'
+import { reactive, ref } from 'vue' 
 import { useRouter } from 'vue-router'
+import request from '@/utils/request'
 import '@/assets/css/auth-styles.css'
+
 const router = useRouter()
 const registerData = reactive({
   username: '',
@@ -67,16 +69,35 @@ const registerData = reactive({
   password: '',
   confirmPassword: '',
 })
-const handleRegister = () => {
+
+
+const isLoading = ref(false) 
+
+const handleRegister = async () => {
   if (registerData.password !== registerData.confirmPassword) {
     alert('两次输入的密码不一致！')
     return
   }
-  console.log('正在使用以下信息注册:', registerData)
 
-  // 假设 API 调用成功
-
-  alert('注册成功！将跳转到登录页面。')
-  router.push('/login')
+  isLoading.value = true
+  try {
+    await request.post('/auth/register', {
+      username: registerData.username,
+      email: registerData.email,
+      password: registerData.password
+    })
+    
+    alert('注册成功！')
+    router.push('/login')
+  } catch (error: unknown) { 
+    console.error('注册失败:', error)
+    
+    const axiosError = error as { response?: { data?: { detail?: string } } };
+    const errorMsg = axiosError.response?.data?.detail || '注册失败，请稍后重试'
+    
+    alert(`错误: ${errorMsg}`)
+  } finally {
+    isLoading.value = false
+  }
 }
 </script>

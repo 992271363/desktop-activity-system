@@ -33,8 +33,21 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import axios, { AxiosError } from 'axios' // <--- 1. 引入 AxiosError 类型
+import request from '@/utils/request'
+import axios, { AxiosError } from 'axios'
 import '@/assets/css/auth-styles.css'
+
+
+interface LoginResponse {
+  access_token: string
+  token_type: string
+  // 后端其他字段，可以在这里补充
+}
+
+
+interface BackendError {
+  detail: string
+}
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -56,26 +69,29 @@ const handleLogin = async () => {
   errorMessage.value = ''
 
   try {
-    const formData = new FormData()
-    formData.append('username', loginData.username)
-    formData.append('password', loginData.password)
+    const params = new URLSearchParams()
+    params.append('username', loginData.username)
+    params.append('password', loginData.password)
 
-    const response = await axios.post<{ access_token: string }>('/api/auth/token', formData)
+    // 3. 发起请求并指定返回类型
+    // 因为 request.ts 拦截器返回了 response.data，所以这里 res 的类型就是 LoginResponse
+    const res = await request.post<LoginResponse>('/auth/token', params) as unknown as LoginResponse
 
-    const { access_token } = response.data
+    const { access_token } = res
 
     authStore.setLoginState(access_token, loginData.username)
+    
+    console.log('登录成功')
     router.push('/')
-  } catch (err) {
-    console.error('登录失败:', err)
+  } catch (err: unknown) {
+    console.error('登录异常:', err)
 
-    // 3. 使用类型断言，将 err 视为 AxiosError
-    const error = err as AxiosError
-
-    if (error.response && error.response.status === 401) {
-      errorMessage.value = '用户名或密码错误'
+    if (axios.isAxiosError(err)) {
+      const axiosError = err as AxiosError<BackendError>
+      const errorMsg = axiosError.response?.data?.detail || '用户名或密码错误'
+      errorMessage.value = errorMsg
     } else {
-      errorMessage.value = '登录失败，请检查网络或稍后重试'
+      errorMessage.value = '网络异常，请稍后再试'
     }
   } finally {
     isLoading.value = false
