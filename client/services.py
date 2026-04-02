@@ -67,7 +67,7 @@ class GlobalMonitorWorker(QObject):
         while self._running:
             try:
                 self._check_processes_lifecycle_nonblocking()
-                self._check_focus_nonblocking()
+                self._check_focus_nonblocking(1.0)
                 self._emit_status()
 
                 # 灵敏等待，每 0.1 秒检查一次是否停止，总共 1 秒
