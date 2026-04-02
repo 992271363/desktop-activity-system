@@ -38,7 +38,7 @@ class ActiveSession:
         self.pid = pid
         self.exe_name = exe_name
         self.start_time = start_time
-        self.focus_seconds = 0
+        self.focus_seconds = 0.0
         self.focus_details = {}
         self.is_focused = False
 
@@ -53,6 +53,7 @@ class GlobalMonitorWorker(QObject):
         self._running = True
         self._mutex = QMutex()
         self._active_sessions: Dict[int, ActiveSession] = {}
+        self._last_tick = None
 
     def update_watch_list(self, new_list: List[str]):
         with QMutexLocker(self._mutex):
@@ -106,7 +107,7 @@ class GlobalMonitorWorker(QObject):
                 self._save_session(self._active_sessions[pid])
                 del self._active_sessions[pid]
 
-    def _check_focus_nonblocking(self):
+    def _check_focus_nonblocking(self, delta_seconds: float):
         if not self._running:
             return
         try:
@@ -116,9 +117,9 @@ class GlobalMonitorWorker(QObject):
             if fg_pid in self._active_sessions:
                 session = self._active_sessions[fg_pid]
                 session.is_focused = True
-                session.focus_seconds += 1
+                session.focus_seconds += delta_seconds
                 window_title = win32gui.GetWindowText(fg_window) or "未知窗口"
-                session.focus_details[window_title] = session.focus_details.get(window_title, 0) + 1
+                session.focus_details[window_title] = session.focus_details.get(window_title, 0.0) + delta_seconds
         except Exception:
             pass
 
@@ -153,7 +154,7 @@ class GlobalMonitorWorker(QObject):
             runtime_seconds = int((now - session.start_time).total_seconds())
             status_data[name] = {
                 "pid": pid,
-                "focus": session.focus_seconds,
+                "focus": int(session.focus_seconds),
                 "runtime_seconds": runtime_seconds,
                 "start_str": session.start_time.strftime("%H:%M:%S"),
                 "is_focused": session.is_focused

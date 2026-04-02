@@ -106,4 +106,14 @@ def get_recent_activity(
         .limit(limit)\
         .all()
 
-    return sessions
+    return [
+        {
+            "id": s.id,
+            "process_name": s.process_name,
+            "session_start_time": s.session_start_time,
+            "session_end_time": s.session_end_time,
+            "total_lifetime_seconds": s.total_lifetime_seconds,
+            "total_focus_seconds": s.total_focus_seconds,
+        }
+        for s in sessions
+    ]

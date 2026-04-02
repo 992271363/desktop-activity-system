@@ -75,11 +75,12 @@ def record_process_session(
     else:
         print(f"[Tracking Service] -> 该会话检测到 {len(focus_details)} 个窗口标题活动...")
         for title, focus_seconds in focus_details.items():
-            if focus_seconds > 0:
+            focus_seconds_int = int(focus_seconds)
+            if focus_seconds_int > 0:
                 activity = FocusActivity(
                     session=new_session,  # 通过关系关联到刚刚创建的会话
                     window_title=title,
-                    focus_duration_seconds=focus_seconds
+                    focus_duration_seconds=focus_seconds_int
                 )
                 db.add(activity)
                 print(f"[Tracking Service]     - 焦点活动: '{title}' ({focus_seconds}s)")
