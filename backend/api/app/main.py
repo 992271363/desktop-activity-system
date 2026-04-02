@@ -43,8 +43,8 @@ def sync_sessions_from_client(
                 application_id=watched_app.id
             ).with_for_update().first()
 
-            current_session_focus_seconds = sum(act.focus_duration_seconds for act in session_dto.activities)
-
+            #current_session_focus_seconds = sum(act.focus_duration_seconds for act in session_dto.activities)
+            current_session_focus_seconds = session_dto.total_focus_seconds
             if not summary:
                 summary = models.ServerAppUsageSummary(
                     application=watched_app,

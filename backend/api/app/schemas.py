@@ -15,6 +15,7 @@ class SyncProcessSession(BaseModel):
     session_start_time: datetime
     session_end_time: datetime
     total_lifetime_seconds: int
+    total_focus_seconds: int
     activities: List[SyncFocusActivity]
 
 # 用于 API 输出和内部使用的模型

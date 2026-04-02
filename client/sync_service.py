@@ -23,6 +23,7 @@ def get_and_prepare_sync_data():
                     "session_start_time": activity.session.session_start_time.isoformat(),
                     "session_end_time": activity.session.session_end_time.isoformat(),
                     "total_lifetime_seconds": activity.session.total_lifetime_seconds,
+                    "total_focus_seconds": activity.session.total_focus_seconds,
                     "activities": []
                 }
 
