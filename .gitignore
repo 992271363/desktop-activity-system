@@ -228,3 +228,6 @@ dist/
 
 #backFile
 *.back
+
+#other file
+MakeDemoData.py

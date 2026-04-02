@@ -111,6 +111,9 @@ class GlobalMonitorWorker(QObject):
         if not self._running:
             return
         try:
+            # --- 关键修复：先将所有活跃会话的焦点状态重置为 False ---
+            for session in self._active_sessions.values():
+                session.is_focused = False
             fg_window = win32gui.GetForegroundWindow()
             if not fg_window: return
             _, fg_pid = win32process.GetWindowThreadProcessId(fg_window)
