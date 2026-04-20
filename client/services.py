@@ -34,9 +34,10 @@ def get_process_list() -> List[ProcessInfo]:
 
 # --- 全局监控 Worker ---
 class ActiveSession:
-    def __init__(self, pid, exe_name, start_time):
+    def __init__(self, pid, exe_name, exe_path, start_time):
         self.pid = pid
         self.exe_name = exe_name
+        self.exe_path = exe_path
         self.start_time = start_time
         self.focus_seconds = 0.0
         self.focus_details = {}
@@ -47,17 +48,23 @@ class GlobalMonitorWorker(QObject):
     session_finished = Signal(str, int)
     finished = Signal()
 
-    def __init__(self, watched_apps_list: List[str]):
+    def __init__(self, watched_apps_info: List[tuple]):
+        """
+        watched_apps_info: List[(exe_path, exe_name), ...]
+        """
         super().__init__()
-        self._target_apps = set(app.lower() for app in watched_apps_list)
+        self._target_apps = {path.lower(): (path, name) for path, name in watched_apps_info}
         self._running = True
         self._mutex = QMutex()
         self._active_sessions: Dict[int, ActiveSession] = {}
         self._last_tick = None
 
-    def update_watch_list(self, new_list: List[str]):
+    def update_watch_list(self, new_list: List[tuple]):
+        """
+        new_list: List[(exe_path, exe_name), ...]
+        """
         with QMutexLocker(self._mutex):
-            self._target_apps = set(app.lower() for app in new_list)
+            self._target_apps = {path.lower(): (path, name) for path, name in new_list}
 
     def stop(self):
         self._running = False
@@ -92,12 +99,13 @@ class GlobalMonitorWorker(QObject):
                 if not proc.info['exe']:
                     continue
                 p_name = proc.info['name']
-                p_lower = p_name.lower()
+                p_path = proc.info['exe']
+                p_path_lower = p_path.lower()
                 p_pid = proc.info['pid']
-                if p_lower in self._target_apps:
+                if p_path_lower in self._target_apps:
                     current_pids.add(p_pid)
                     if p_pid not in self._active_sessions:
-                        self._active_sessions[p_pid] = ActiveSession(p_pid, p_name, datetime.datetime.now())
+                        self._active_sessions[p_pid] = ActiveSession(p_pid, p_name, p_path, datetime.datetime.now())
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
 
@@ -134,6 +142,7 @@ class GlobalMonitorWorker(QObject):
         db = SessionLocal()
         try:
             record_process_session(db=db,
+                                   executable_path=session.exe_path,
                                    executable_name=session.exe_name,
                                    start_time=session.start_time,
                                    end_time=end_time,
@@ -153,9 +162,11 @@ class GlobalMonitorWorker(QObject):
         status_data = {}
         now = datetime.datetime.now()
         for pid, session in self._active_sessions.items():
+            path = session.exe_path
             name = session.exe_name
             runtime_seconds = int((now - session.start_time).total_seconds())
-            status_data[name] = {
+            status_data[path] = {
+                "name": name,
                 "pid": pid,
                 "focus": int(session.focus_seconds),
                 "runtime_seconds": runtime_seconds,

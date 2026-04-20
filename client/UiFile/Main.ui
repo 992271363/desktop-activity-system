@@ -99,11 +99,16 @@
      <string>最后一次启动</string>
     </property>
    </column>
-   <column>
-    <property name="text">
-     <string/>
-    </property>
-   </column>
+    <column>
+     <property name="text">
+      <string>总焦点时长</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>总运行时长</string>
+     </property>
+    </column>
   </widget>
  </widget>
  <resources/>

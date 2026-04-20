@@ -126,26 +126,26 @@ class Mywindow(QMainWindow, Ui_desktopActivitySystem):
         return item
 
     def start_global_monitor(self):
-        watched_list = self.get_watched_apps_names()
+        watched_info = self.get_watched_apps_info()
         self.monitor_thread = QThread()
-        self.monitor_worker = GlobalMonitorWorker(watched_list)
+        self.monitor_worker = GlobalMonitorWorker(watched_info)
         self.monitor_worker.moveToThread(self.monitor_thread)
         self.monitor_thread.started.connect(self.monitor_worker.run)
-        
+
         # 连接退出信号：Worker结束 -> 线程退出
         self.monitor_worker.finished.connect(self.monitor_thread.quit)
-        
+
         self.monitor_worker.finished.connect(self.monitor_worker.deleteLater)
         self.monitor_thread.finished.connect(self.monitor_thread.deleteLater)
         self.monitor_worker.status_updated.connect(self.update_table_status)
         self.monitor_thread.start()
 
-    def get_watched_apps_names(self):
+    def get_watched_apps_info(self):
         db = SessionLocal()
         apps = db.query(WatchedApplication).all()
-        names = [app.executable_name for app in apps]
+        infos = [(app.executable_path, app.executable_name) for app in apps]
         db.close()
-        return names
+        return infos
 
     def refresh_table_from_db(self):
         db = SessionLocal()
@@ -154,13 +154,17 @@ class Mywindow(QMainWindow, Ui_desktopActivitySystem):
         for app in apps:
             row = self.tableWidget.rowCount()
             self.tableWidget.insertRow(row)
-            
+
             self.tableWidget.setItem(row, 0, self.create_status_item("#cbd5e0"))
-            self.tableWidget.setItem(row, 1, QTableWidgetItem(app.executable_name))
+
+            name_item = QTableWidgetItem(app.executable_name)
+            name_item.setData(Qt.UserRole, app.executable_path)
+            self.tableWidget.setItem(row, 1, name_item)
+
             self.tableWidget.setItem(row, 2, QTableWidgetItem("-"))
             self.tableWidget.setItem(row, 3, QTableWidgetItem("-"))
             self.tableWidget.setItem(row, 4, QTableWidgetItem("-"))
-            
+
             base_focus = app.summary.total_focus_time_seconds
             item_focus = QTableWidgetItem(format_seconds_to_text(base_focus))
             item_focus.setData(Qt.UserRole, base_focus)
@@ -170,32 +174,33 @@ class Mywindow(QMainWindow, Ui_desktopActivitySystem):
             item_life = QTableWidgetItem(format_seconds_to_text(base_life))
             item_life.setData(Qt.UserRole, base_life)
             self.tableWidget.setItem(row, 6, item_life)
-            
+
         db.close()
 
     @Slot(dict)
     def update_table_status(self, status_data: dict):
         for row in range(self.tableWidget.rowCount()):
-            exe_name = self.tableWidget.item(row, 1).text()
+            exe_name_item = self.tableWidget.item(row, 1)
+            exe_path = exe_name_item.data(Qt.UserRole)
             current_status_item = self.tableWidget.item(row, 0)
-            
+
             item_total_focus = self.tableWidget.item(row, 5)
             item_total_life = self.tableWidget.item(row, 6)
-            
+
             base_focus = item_total_focus.data(Qt.UserRole) or 0
             base_life = item_total_life.data(Qt.UserRole) or 0
 
-            if exe_name in status_data:
-                data = status_data[exe_name]
+            if exe_path in status_data:
+                data = status_data[exe_path]
                 status_color = "#48bb78" if data['is_focused'] else "#4299e1"
-                
+
                 self.tableWidget.setItem(row, 0, self.create_status_item(status_color))
                 self.tableWidget.setItem(row, 2, QTableWidgetItem(format_seconds_to_text(data['focus'])))
                 self.tableWidget.setItem(row, 3, QTableWidgetItem(format_seconds_to_text(data['runtime_seconds'])))
                 self.tableWidget.setItem(row, 4, QTableWidgetItem(data['start_str']))
                 current_total_focus = base_focus + data['focus']
                 item_total_focus.setText(format_seconds_to_text(current_total_focus))
-                
+
                 current_total_life = base_life + data['runtime_seconds']
                 item_total_life.setText(format_seconds_to_text(current_total_life))
             else:
@@ -211,17 +216,54 @@ class Mywindow(QMainWindow, Ui_desktopActivitySystem):
     def open_add_app_dialog(self):
         dialog = DialogWindow(self)
         if dialog.exec() == QDialog.Accepted:
-            selected_name = dialog.get_selected_proc_name()
-            if selected_name:
-                exe_name = selected_name
+            selected_info = dialog.get_selected_proc_info()
+            if selected_info:
+                exe_path, exe_name = selected_info
                 db = SessionLocal()
-                existing = db.query(WatchedApplication).filter_by(executable_name=exe_name).first()
+                existing = db.query(WatchedApplication).filter_by(executable_path=exe_path).first()
                 if not existing:
-                    add_or_get_watched_app(db, exe_name)
+                    add_or_get_watched_app(db, exe_path, exe_name)
                     self.statusBar().showMessage(f"已添加: {exe_name}", 3000)
                     self.refresh_table_from_db()
                     if self.monitor_worker:
-                        self.monitor_worker.update_watch_list(self.get_watched_apps_names())
+                        self.monitor_worker.update_watch_list(self.get_watched_apps_info())
+                else:
+                    self.statusBar().showMessage("该应用已在监控列表中", 3000)
+                db.close()
+
+    def open_detail_dialog(self, index):
+        row = index.row()
+        exe_path = self.tableWidget.item(row, 1).data(Qt.UserRole)
+        db = SessionLocal()
+        app_data = db.query(WatchedApplication).filter_by(executable_path=exe_path).first()
+        if app_data:
+            dialog = AppDetailDialog(app_data, self)
+            dialog.exec()
+        db.close()
+
+    def show_context_menu(self, pos):
+        menu = QMenu()
+        detail_action = menu.addAction("查看详细信息")
+        delete_action = menu.addAction("不再监控此应用")
+        action = menu.exec(self.tableWidget.mapToGlobal(pos))
+
+        if action == detail_action:
+            idx = self.tableWidget.currentIndex()
+            if idx.isValid(): self.open_detail_dialog(idx)
+        elif action == delete_action:
+            row = self.tableWidget.currentRow()
+            if row >= 0:
+                exe_name = self.tableWidget.item(row, 1).text()
+                exe_path = self.tableWidget.item(row, 1).data(Qt.UserRole)
+                reply = QMessageBox.question(self, "确认", f"确定移除 {exe_name} 吗？\n历史数据会保留。", QMessageBox.Yes | QMessageBox.No)
+                if reply == QMessageBox.Yes:
+                    db = SessionLocal()
+                    db.query(WatchedApplication).filter_by(executable_path=exe_path).delete()
+                    db.commit()
+                    db.close()
+                    self.refresh_table_from_db()
+                    if self.monitor_worker:
+                        self.monitor_worker.update_watch_list(self.get_watched_apps_info())
                 else:
                     self.statusBar().showMessage("该应用已在监控列表中", 3000)
                 db.close()
@@ -353,12 +395,14 @@ class DialogWindow(QDialog, Ui_ProcList):
 
         self.populate_process_list()
 
-    def get_selected_proc_name(self): 
+    def get_selected_proc_info(self):
         selected_rows_indexes = self.procTable.selectionModel().selectedRows()
         if not selected_rows_indexes:
             return None
         row = selected_rows_indexes[0].row()
-        return self.procTable.item(row, 1).text()
+        exe_name = self.procTable.item(row, 1).text()
+        exe_path = self.procTable.item(row, 2).text()
+        return (exe_path, exe_name)
 
     def populate_process_list(self):
         search_term = self.lineEdit_search.text().lower().strip()

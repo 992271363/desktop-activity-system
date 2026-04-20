@@ -7,17 +7,18 @@ class WatchedApplication(Base):
 
     __tablename__ = 'watched_applications'
     id = Column(Integer, primary_key=True)
-    executable_name = Column(String, nullable=False, unique=True)
+    executable_name = Column(String, nullable=False)
+    executable_path = Column(String, nullable=False, unique=True)
     summary = relationship("AppUsageSummary", back_populates="application", uselist=False, cascade="all, delete-orphan")
     def __repr__(self):
-        return f"<WatchedApplication(exe='{self.executable_name}')>"
+        return f"<WatchedApplication(exe='{self.executable_name}', path='{self.executable_path}')>"
 
 # 用于存储每个被监视的可执行文件的累计使用情况。
 class AppUsageSummary(Base):
     __tablename__ = 'app_usage_summary'
     id = Column(Integer, primary_key=True)
     # 使用外键关联到被监视的程序
-    executable_name = Column(String, ForeignKey('watched_applications.executable_name'), nullable=False, unique=True)
+    executable_path = Column(String, ForeignKey('watched_applications.executable_path'), nullable=False, unique=True)
     # 第一次启动时间
     first_seen_at = Column(DateTime, nullable=True)
     # 最后一次启动时间
@@ -32,7 +33,7 @@ class AppUsageSummary(Base):
     application = relationship("WatchedApplication", back_populates="summary")
     sessions = relationship("ProcessSession", back_populates="summary", cascade="all, delete-orphan")
     def __repr__(self):
-        return (f"<AppUsageSummary(exe='{self.executable_name}', "
+        return (f"<AppUsageSummary(path='{self.executable_path}', "
                 f"lifetime={self.total_lifetime_seconds}s, focus={self.total_focus_time_seconds}s)>")
 
 # 存储每个被监视的可执行文件的每个会话的详细信息。
