@@ -10,7 +10,7 @@ def get_and_prepare_sync_data():
     db = SessionLocal()
     try:
         activities_to_sync = db.query(FocusActivity).options(
-            joinedload(FocusActivity.session)
+            joinedload(FocusActivity.session).joinedload("summary")
         ).filter(FocusActivity.synced == False).all()
         if not activities_to_sync:
             return [], []
@@ -20,6 +20,7 @@ def get_and_prepare_sync_data():
             if session_id not in sessions_map:
                 sessions_map[session_id] = {
                     "process_name": activity.session.process_name,
+                    "executable_path": activity.session.summary.executable_path,
                     "session_start_time": activity.session.session_start_time.isoformat(),
                     "session_end_time": activity.session.session_end_time.isoformat(),
                     "total_lifetime_seconds": activity.session.total_lifetime_seconds,

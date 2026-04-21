@@ -22,18 +22,19 @@ def sync_sessions_from_client(
         return {"message": "无新数据需要同步。"}
         
     try:
-        
+
         for session_dto in sessions_data:
             #查找或创建WatchedApplication
             watched_app = db.query(models.ServerWatchedApplication).filter_by(
-                user_id=current_user.id, 
-                executable_name=session_dto.process_name
+                user_id=current_user.id,
+                executable_path=session_dto.executable_path
             ).first()
 
             if not watched_app:
                 watched_app = models.ServerWatchedApplication(
                     owner=current_user,
-                    executable_name=session_dto.process_name
+                    executable_name=session_dto.process_name,
+                    executable_path=session_dto.executable_path
                 )
                 db.add(watched_app)
                 db.flush()

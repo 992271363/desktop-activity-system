@@ -17,7 +17,8 @@ class User(Base):
 class ServerWatchedApplication(Base):
     __tablename__ = 'server_watched_applications'
     id = Column(Integer, primary_key=True)
-    executable_name = Column(String(255), nullable=False, index=True)
+    executable_name = Column(String(255), nullable=False)
+    executable_path = Column(String(512), nullable=False, unique=True, index=True)
 
     # 外键：关联到用户
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)

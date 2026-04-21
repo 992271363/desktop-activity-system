@@ -12,6 +12,7 @@ class SyncFocusActivity(BaseModel):
 # 客户端发来的每个会话的数据包
 class SyncProcessSession(BaseModel):
     process_name: str
+    executable_path: str
     session_start_time: datetime
     session_end_time: datetime
     total_lifetime_seconds: int

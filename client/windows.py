@@ -1,8 +1,9 @@
 import datetime
-from PySide6.QtCore import Qt, QThread, Signal, Slot
+from PySide6.QtCore import Qt, QThread, Signal, Slot, QTimer
 from PySide6.QtWidgets import (QApplication, QMainWindow, QDialog, QTableWidgetItem,
                                QHeaderView, QAbstractItemView, QMenu, QMessageBox,
-                               QFormLayout, QLabel, QFrame, QDialogButtonBox)
+                               QFormLayout, QLabel, QFrame, QDialogButtonBox,
+                               QVBoxLayout, QProgressBar)
 from PySide6.QtGui import QFont, QColor, QBrush
 
 # 业务引用
@@ -69,6 +70,41 @@ class AppDetailDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.Close)
         buttons.rejected.connect(self.reject)
         layout.addRow(buttons)
+
+# 关闭提示对话框
+class ClosingDialog(QDialog):
+    """关闭时的提示对话框，显示保存进度"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("正在关闭")
+        self.setFixedSize(320, 140)
+        # 去掉问号按钮，保留关闭按钮但禁用
+        self.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint | Qt.WindowTitleHint)
+        self.setModal(True)  # 模态对话框
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(25, 20, 25, 20)
+        layout.setSpacing(15)
+
+        self.status_label = QLabel("正在保存数据，请稍候...", self)
+        self.status_label.setAlignment(Qt.AlignCenter)
+        font = QFont()
+        font.setPointSize(10)
+        self.status_label.setFont(font)
+        layout.addWidget(self.status_label)
+
+        # 无限循环进度条（表示正在处理）
+        self.progress = QProgressBar(self)
+        self.progress.setRange(0, 0)  # 0-0 表示无限循环模式
+        self.progress.setTextVisible(False)
+        self.progress.setFixedHeight(6)
+        layout.addWidget(self.progress)
+
+    def set_status(self, text: str):
+        """更新状态文字"""
+        self.status_label.setText(text)
+        # 强制立即重绘，避免卡顿不更新
+        QApplication.processEvents()
 
 # 主窗口
 class Mywindow(QMainWindow, Ui_desktopActivitySystem):
@@ -349,26 +385,84 @@ class Mywindow(QMainWindow, Ui_desktopActivitySystem):
 
     # --- 核心修复：优雅退出逻辑 ---
     def closeEvent(self, event):
-    # 先停止监控线程
+        # 1. 立即显示关闭提示对话框
+        self._closing_dialog = ClosingDialog(self)
+        self._closing_dialog.show()
+        # 强制立即处理事件，确保对话框完全渲染显示出来
+        for _ in range(5):  # 多处理几次，确保对话框已显示
+            QApplication.processEvents()
+            import time
+            time.sleep(0.01)  # 10ms，让UI线程有机会渲染
+
+        # 2. 停止监控线程（非阻塞轮询，保持UI响应）
+        print("[Close] 开始处理监控线程...")
         if self.monitor_worker and self.monitor_thread:
+            print(f"[Close] 监控线程存在，isRunning={self.monitor_thread.isRunning()}")
+            self._closing_dialog.set_status("正在停止进程监控...")
             self.monitor_worker.stop()
             self.monitor_thread.quit()
-            if not self.monitor_thread.wait(1000):  # 等待1秒
-                print("监控线程停止超时，但继续关闭")
-        
-        # 优雅停止同步线程
+            # 非阻塞等待，保持进度条动画
+            self._wait_for_thread(self.monitor_thread, 1500, self._closing_dialog, "正在停止进程监控")
+
+        # 3. 优雅停止同步线程
+        print(f"[Close Debug] sync_worker: {self.sync_worker}, sync_thread: {self.sync_thread}")
         if self.sync_worker and self.sync_thread:
-            # 1. 发出停止信号，但不强制退出
+            print(f"[Close Debug] 同步线程运行状态: {self.sync_thread.isRunning()}")
+            self._closing_dialog.set_status("正在停止同步服务...")
+            print("[Close Debug] 发送停止信号...")
             self.request_stop_sync.emit()
-            
-            # 2. 给予合理时间让同步线程完成当前操作
-            if not self.sync_thread.wait(3000):  # 等待3秒让同步完成
-                print("同步线程正在完成最后操作，稍后自动退出")
-                
-            # 3. 不再强制退出，让线程自然结束
-            # 系统关闭时会自动清理资源
-        
-        # 4. 继续关闭主窗口
+            print("[Close Debug] 开始等待同步线程结束...")
+            # 非阻塞等待，保持进度条动画
+            self._wait_for_thread(self.sync_thread, 3000, self._closing_dialog, "正在停止同步服务")
+            print("[Close Debug] 同步线程等待完成")
+        else:
+            print("[Close Debug] 同步组件不存在，跳过")
+
+        # 4. 最后提示并关闭对话框
+        self._closing_dialog.set_status("保存完成，正在关闭...")
+        QApplication.processEvents()
+        # 短暂延时让用户看到最终提示
+        QTimer.singleShot(300, self._finish_close_event)
+
+        # 暂时忽略关闭事件，等定时器完成后再真正关闭
+        event.ignore()
+
+    def _wait_for_thread(self, thread, timeout_ms, dialog=None, status_text=""):
+        """非阻塞等待线程结束，保持UI更新和进度条动画"""
+        import time
+        start_time = time.time() * 1000
+        check_count = 0
+
+        while thread.isRunning():
+            check_count += 1
+            # 每500ms更新一次对话框文字，让用户知道还在运行
+            if dialog and check_count % 25 == 0:  # 25 * 20ms = 500ms
+                elapsed = int((time.time() * 1000 - start_time) / 100) / 10
+                dialog.set_status(f"{status_text} (已等待{elapsed}秒)...")
+
+            # 处理事件，保持进度条动画
+            QApplication.processEvents()
+
+            # 检查超时
+            if (time.time() * 1000 - start_time) > timeout_ms:
+                print(f"线程停止超时({timeout_ms}ms)，线程仍在运行: {thread.isRunning()}")
+                break
+
+            # 短暂休眠，避免CPU空转
+            time.sleep(0.02)  # 20ms
+
+        print(f"线程等待结束，总共检查{check_count}次，最终状态: {thread.isRunning()}")
+
+    def _finish_close_event(self):
+        """完成最终的关闭操作"""
+        if self._closing_dialog:
+            self._closing_dialog.close()
+            self._closing_dialog = None
+        # 真正关闭窗口
+        self.close()
+
+    def closeEvent_real(self, event):
+        """实际的关闭处理（备用，防止循环调用）"""
         super().closeEvent(event)
 # --- DialogWindow (保留你的全功能版本) ---
 class DialogWindow(QDialog, Ui_ProcList):
