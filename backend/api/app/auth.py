@@ -49,6 +49,22 @@ def create_user(db: Session, user: schemas.UserCreate) -> models.User:
     """
     创建新用户并存入数据库。
     """
+    # 检查邮箱是否已被注册
+    existing_email = db.query(models.User).filter(models.User.email == user.email).first()
+    if existing_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该邮箱已被注册"
+        )
+
+    # 检查用户名是否已被使用
+    existing_username = db.query(models.User).filter(models.User.username == user.username).first()
+    if existing_username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="该用户名已被使用"
+        )
+
     hashed_password = get_password_hash(user.password)
     db_user = models.User(username=user.username, email=user.email, hashed_password=hashed_password)
     db.add(db_user)
