@@ -1,9 +1,19 @@
 from typing import List
+from datetime import datetime, timezone
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from . import models, schemas, auth, database
 from .routers import dashboard
+
+
+def ensure_aware_dt(dt: datetime) -> datetime:
+    """如果 datetime 是 naive（无时区），则假定为 UTC 并添加时区信息"""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 # 初始化数据库表
 models.Base.metadata.create_all(bind=database.engine) 
@@ -46,12 +56,14 @@ def sync_sessions_from_client(
 
             #current_session_focus_seconds = sum(act.focus_duration_seconds for act in session_dto.activities)
             current_session_focus_seconds = session_dto.total_focus_seconds
+            start_time = ensure_aware_dt(session_dto.session_start_time)
+            end_time = ensure_aware_dt(session_dto.session_end_time)
             if not summary:
                 summary = models.ServerAppUsageSummary(
                     application=watched_app,
-                    first_seen_at=session_dto.session_start_time,
-                    last_seen_start_at=session_dto.session_start_time,
-                    last_seen_end_at=session_dto.session_end_time,
+                    first_seen_at=start_time,
+                    last_seen_start_at=start_time,
+                    last_seen_end_at=end_time,
                     total_lifetime_seconds=session_dto.total_lifetime_seconds,
                     total_focus_time_seconds=current_session_focus_seconds
                 )
@@ -59,10 +71,10 @@ def sync_sessions_from_client(
             else:
                 summary.total_lifetime_seconds += session_dto.total_lifetime_seconds
                 summary.total_focus_time_seconds += current_session_focus_seconds
-                summary.last_seen_start_at = session_dto.session_start_time
-                summary.last_seen_end_at = session_dto.session_end_time
-                if not summary.first_seen_at or summary.first_seen_at > session_dto.session_start_time:
-                    summary.first_seen_at = session_dto.session_start_time
+                summary.last_seen_start_at = start_time
+                summary.last_seen_end_at = end_time
+                if not summary.first_seen_at or summary.first_seen_at > start_time:
+                    summary.first_seen_at = start_time
             
             db.flush()
 
@@ -70,8 +82,8 @@ def sync_sessions_from_client(
             new_session = models.ServerProcessSession(
                 summary_id=summary.id,
                 process_name=session_dto.process_name,
-                session_start_time=session_dto.session_start_time,
-                session_end_time=session_dto.session_end_time,
+                session_start_time=start_time,
+                session_end_time=end_time,
                 total_lifetime_seconds=session_dto.total_lifetime_seconds,
                 total_focus_seconds=current_session_focus_seconds
             )

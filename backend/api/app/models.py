@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -16,17 +16,21 @@ class User(Base):
 #被监视的应用 (顶层模型)
 class ServerWatchedApplication(Base):
     __tablename__ = 'server_watched_applications'
+    __table_args__ = (
+        UniqueConstraint('user_id', 'executable_path', name='uix_user_exec_path'),
+    )
+
     id = Column(Integer, primary_key=True)
     executable_name = Column(String(255), nullable=False)
-    executable_path = Column(String(512), nullable=False, unique=True, index=True)
+    executable_path = Column(String(512), nullable=False, index=True)
 
     # 外键：关联到用户
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    
+    user_id = Column(Integer, ForeignKey(“users.id”), nullable=False, index=True)
+
     # 关系：指回它的拥有者
-    owner = relationship("User", back_populates="watched_applications")
-    # 关系：一个“被监视的应用”对应一个“总账”
-    summary = relationship("ServerAppUsageSummary", back_populates="application", uselist=False, cascade="all, delete-orphan")
+    owner = relationship(“User”, back_populates=”watched_applications”)
+    # 关系：一个”被监视的应用”对应一个”总账”
+    summary = relationship(“ServerAppUsageSummary”, back_populates=”application”, uselist=False, cascade=”all, delete-orphan”)
 
 # 应用使用总账
 class ServerAppUsageSummary(Base):
