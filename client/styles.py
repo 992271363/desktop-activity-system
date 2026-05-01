@@ -214,8 +214,11 @@ QMenu::separator {
 }
 
 /* ---- 标签 ---- */
-QLabel {
+QLabel,
+QDialog QLabel,
+QMainWindow QLabel {
     background: transparent;
+    color: #000000 !important;
 }
 
 /* ---- 进度条 ---- */

@@ -10,6 +10,7 @@ if __name__ == "__main__":
     print("数据库初始化完成。")
 
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
     app.setStyleSheet(MODERN_LIGHT_QSS)
     window = Mywindow()
     window.show()
