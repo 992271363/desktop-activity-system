@@ -229,6 +229,7 @@ dist/
 
 #backFile
 *.back
+UiFile.back/
 
 #other file
 MakeDemoData.py
@@ -236,3 +237,5 @@ MakeDemoData.py
 #exe test
 dist_test/
 .claude/
+
+开发日志.md

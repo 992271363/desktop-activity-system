@@ -1,17 +1,54 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QDialog, QHeaderView, QAbstractItemView, QTableWidgetItem
+    QDialog, QTableWidget, QTableWidgetItem, QPushButton, QLineEdit,
+    QLabel, QVBoxLayout, QHBoxLayout, QSpacerItem, QSizePolicy,
+    QHeaderView, QAbstractItemView
 )
 
-from UiFile.Ui_ProcListDialog import Ui_ProcList
 from services import get_process_list
 
 
-class ProcSelectDialog(QDialog, Ui_ProcList):
+class ProcSelectDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setupUi(self)
+        self.setWindowTitle("进程列表")
+        self.resize(564, 429)
         self.proc_pid = None
+
+        # ---- 纯代码 UI 初始化（原 Ui_ProcListDialog.py 逻辑内联）----
+        self.verticalLayout = QVBoxLayout(self)
+
+        self.procTable = QTableWidget()
+        self.procTable.setColumnCount(3)
+        self.procTable.setHorizontalHeaderLabels(["PID", "进程名", "进程路径"])
+        self.verticalLayout.addWidget(self.procTable)
+
+        self.horizontalLayout_2 = QHBoxLayout()
+        self.list_brush = QPushButton("刷新")
+        self.horizontalLayout_2.addWidget(self.list_brush)
+        self.horizontalLayout_2.addSpacerItem(
+            QSpacerItem(34, 14, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        )
+        self.lineEdit_search = QLineEdit()
+        self.lineEdit_search.setMaximumSize(155, 16777215)
+        self.lineEdit_search.setAlignment(Qt.AlignCenter)
+        self.lineEdit_search.setPlaceholderText("搜索")
+        self.horizontalLayout_2.addWidget(self.lineEdit_search)
+        self.verticalLayout.addLayout(self.horizontalLayout_2)
+
+        self.horizontalLayout = QHBoxLayout()
+        self.label = QLabel("过长的值可以悬浮鼠标显示")
+        self.horizontalLayout.addWidget(self.label)
+        self.horizontalLayout.addSpacerItem(
+            QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        )
+        self.pushButton_accept = QPushButton("确认")
+        self.pushButton_reject = QPushButton("取消")
+        self.pushButton_reject.setProperty("secondary", True)
+        self.horizontalLayout.addWidget(self.pushButton_accept)
+        self.horizontalLayout.addWidget(self.pushButton_reject)
+        self.verticalLayout.addLayout(self.horizontalLayout)
+        # ---------------------------------------------------------------
 
         self.lineEdit_search.textChanged.connect(self.populate_process_list)
         self.list_brush.clicked.connect(self.populate_process_list)
@@ -25,6 +62,7 @@ class ProcSelectDialog(QDialog, Ui_ProcList):
         self.procTable.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.procTable.setSelectionMode(QAbstractItemView.SingleSelection)
         self.procTable.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.procTable.setAlternatingRowColors(True)
 
         self.pushButton_accept.clicked.connect(self.accept)
         self.pushButton_reject.clicked.connect(self.reject)

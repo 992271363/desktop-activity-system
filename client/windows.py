@@ -1,9 +1,11 @@
 import time
 
 from PySide6.QtCore import Qt, QThread, Signal, Slot, QTimer
-from PySide6.QtWidgets import (QApplication, QMainWindow, QDialog, QTableWidgetItem,
-                               QHeaderView, QAbstractItemView, QMenu, QMessageBox)
-from PySide6.QtGui import QFont, QColor, QBrush
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QDialog, QTableWidget, QTableWidgetItem,
+    QHeaderView, QAbstractItemView, QMenu, QMessageBox, QPushButton, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout
+)
 
 # 业务引用
 from services import GlobalMonitorWorker
@@ -15,7 +17,6 @@ from tracking_service import add_or_get_watched_app
 from login_dialog import LoginDialog
 from sync_service import ApiSyncWorker, get_and_prepare_sync_data, mark_activities_as_synced
 from client_api import send_data_to_api
-from UiFile.Ui_Main import Ui_desktopActivitySystem
 
 # 拆分出的模块
 from utils import format_seconds_to_text
@@ -23,12 +24,41 @@ from dialogs import AppDetailDialog, ClosingDialog
 from proc_dialog import ProcSelectDialog
 
 
-class Mywindow(QMainWindow, Ui_desktopActivitySystem):
+class Mywindow(QMainWindow):
     request_stop_sync = Signal()
 
     def __init__(self):
         super().__init__()
-        self.setupUi(self)
+
+        # ---- 纯代码 UI 初始化（响应式布局）----
+        self.setWindowTitle("desktopActivitySystem")
+        self.resize(925, 382)
+
+        central = QWidget(self)
+        self.setCentralWidget(central)
+        main_layout = QVBoxLayout(central)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(10)
+
+        self.tableWidget = QTableWidget()
+        main_layout.addWidget(self.tableWidget, stretch=1)
+
+        bottom_layout = QHBoxLayout()
+        bottom_layout.setSpacing(10)
+
+        self.pushButton_procs = QPushButton("添加进程")
+        self.login_button = QPushButton("登录")
+        self.user_label = QLabel("账号：")
+        self.user_show = QLabel("N/A")
+
+        bottom_layout.addWidget(self.pushButton_procs)
+        bottom_layout.addWidget(self.login_button)
+        bottom_layout.addWidget(self.user_label)
+        bottom_layout.addWidget(self.user_show)
+        bottom_layout.addStretch()
+
+        main_layout.addLayout(bottom_layout)
+        # ----------------------------------------
 
         # 7 列设置
         columns = ["状态", "应用名称", "本次焦点", "本次运行", "启动时间", "总焦点时长", "总运行时长"]
@@ -50,6 +80,7 @@ class Mywindow(QMainWindow, Ui_desktopActivitySystem):
         self.tableWidget.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tableWidget.customContextMenuRequested.connect(self.show_context_menu)
         self.tableWidget.setColumnWidth(1, 250)
+        self.tableWidget.setAlternatingRowColors(True)
 
         self.token = None
         self.username = None
@@ -68,14 +99,17 @@ class Mywindow(QMainWindow, Ui_desktopActivitySystem):
         self.start_global_monitor()
         self.start_api_sync_service()
 
-    def create_status_item(self, color_hex: str):
-        item = QTableWidgetItem("●")
-        item.setTextAlignment(Qt.AlignCenter)
-        font = QFont()
-        font.setPointSize(16)
-        item.setFont(font)
-        item.setForeground(QBrush(QColor(color_hex)))
-        return item
+    def create_status_label(self, color_hex: str):
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setAlignment(Qt.AlignCenter)
+        dot = QLabel()
+        dot.setFixedSize(14, 14)
+        dot.setStyleSheet(f"background-color: {color_hex}; border-radius: 7px;")
+        layout.addWidget(dot)
+        container.setProperty("status_color", color_hex)
+        return container
 
     def start_global_monitor(self):
         watched_info = self.get_watched_apps_info()
@@ -107,7 +141,7 @@ class Mywindow(QMainWindow, Ui_desktopActivitySystem):
             row = self.tableWidget.rowCount()
             self.tableWidget.insertRow(row)
 
-            self.tableWidget.setItem(row, 0, self.create_status_item("#cbd5e0"))
+            self.tableWidget.setCellWidget(row, 0, self.create_status_label("#cbd5e0"))
 
             name_item = QTableWidgetItem(app.executable_name)
             name_item.setData(Qt.UserRole, app.executable_path)
@@ -134,7 +168,7 @@ class Mywindow(QMainWindow, Ui_desktopActivitySystem):
         for row in range(self.tableWidget.rowCount()):
             exe_name_item = self.tableWidget.item(row, 1)
             exe_path = exe_name_item.data(Qt.UserRole)
-            current_status_item = self.tableWidget.item(row, 0)
+            current_status_widget = self.tableWidget.cellWidget(row, 0)
 
             item_total_focus = self.tableWidget.item(row, 5)
             item_total_life = self.tableWidget.item(row, 6)
@@ -146,7 +180,7 @@ class Mywindow(QMainWindow, Ui_desktopActivitySystem):
                 data = status_data[exe_path]
                 status_color = "#48bb78" if data['is_focused'] else "#4299e1"
 
-                self.tableWidget.setItem(row, 0, self.create_status_item(status_color))
+                self.tableWidget.setCellWidget(row, 0, self.create_status_label(status_color))
                 self.tableWidget.setItem(row, 2, QTableWidgetItem(format_seconds_to_text(data['focus'])))
                 self.tableWidget.setItem(row, 3, QTableWidgetItem(format_seconds_to_text(data['runtime_seconds'])))
                 self.tableWidget.setItem(row, 4, QTableWidgetItem(data['start_str']))
@@ -156,8 +190,8 @@ class Mywindow(QMainWindow, Ui_desktopActivitySystem):
                 current_total_life = base_life + data['runtime_seconds']
                 item_total_life.setText(format_seconds_to_text(current_total_life))
             else:
-                if current_status_item.foreground().color().name() != "#cbd5e0":
-                    self.tableWidget.setItem(row, 0, self.create_status_item("#cbd5e0"))
+                if current_status_widget and current_status_widget.property("status_color") != "#cbd5e0":
+                    self.tableWidget.setCellWidget(row, 0, self.create_status_label("#cbd5e0"))
                     self.tableWidget.setItem(row, 2, QTableWidgetItem("-"))
                     self.tableWidget.setItem(row, 3, QTableWidgetItem("-"))
                     self.tableWidget.setItem(row, 4, QTableWidgetItem("-"))
