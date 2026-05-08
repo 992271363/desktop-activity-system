@@ -1,11 +1,13 @@
 import os
+from pathlib import Path
 import requests
 from dotenv import load_dotenv
 from typing import List, Dict, Any, Optional, Tuple
 from enum import Enum
 
-load_dotenv()
-API_BASE_URL = os.getenv("API_BASE_URL", "http://127.0.0.1/api")
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+BASE_URL = os.getenv("BASE_URL", "http://127.0.0.1").rstrip('/')
+API_URL = f"{BASE_URL}/api"
 
 #定义一个清晰的登录状态枚举
 class LoginStatus(Enum):
@@ -21,8 +23,7 @@ def api_login(username: str, password: str) -> Tuple[LoginStatus, Optional[str]]
     Returns:
         一个元组 (LoginStatus, token)，其中 token 只在成功时有效。
     """
-    clean_base_url = API_BASE_URL.rstrip('/')
-    login_url = f"{clean_base_url}/auth/token"
+    login_url = f"{API_URL}/auth/token"
 
     try:
         response = requests.post(
@@ -62,8 +63,7 @@ def send_data_to_api(data_list: List[Dict[str, Any]], endpoint: str, token: str)
     if not data_list:
         return True
 
-    clean_base_url = API_BASE_URL.rstrip('/')
-    target_url = f"{clean_base_url}/{endpoint.lstrip('/')}"
+    target_url = f"{API_URL}/{endpoint.lstrip('/')}"
     headers = {"Authorization": f"Bearer {token}"}
 
     try:
