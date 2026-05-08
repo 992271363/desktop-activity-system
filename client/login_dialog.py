@@ -1,10 +1,12 @@
+import webbrowser
+
 from PySide6.QtCore import QObject, Signal, QThread
 from PySide6.QtWidgets import (
     QDialog, QPushButton, QLabel, QLineEdit,
     QHBoxLayout, QVBoxLayout, QWidget
 )
 
-from client_api import api_login, LoginStatus
+from client_api import api_login, LoginStatus, API_BASE_URL
 
 
 # 创建一个专门用于执行登录任务的 Worker 类
@@ -33,7 +35,7 @@ class LoginDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Dialog")
-        self.setFixedSize(296, 168)
+        self.setFixedSize(296, 192)
 
         # ---- 纯代码 UI 初始化（原 Ui_loginLog.py 逻辑内联）----
         self.login_reject = QPushButton("取消", self)
@@ -43,8 +45,12 @@ class LoginDialog(QDialog):
         self.login_accept = QPushButton("确认", self)
         self.login_accept.setGeometry(70, 90, 75, 24)
 
+        self.register_button = QPushButton("前往注册", self)
+        self.register_button.setProperty("secondary", True)
+        self.register_button.setGeometry(100, 120, 96, 24)
+
         self.tips_label = QLabel("", self)
-        self.tips_label.setGeometry(30, 130, 241, 16)
+        self.tips_label.setGeometry(30, 152, 241, 16)
 
         widget = QWidget(self)
         widget.setGeometry(33, 22, 231, 52)
@@ -75,6 +81,7 @@ class LoginDialog(QDialog):
 
         self.login_accept.clicked.connect(self.attempt_login)
         self.login_reject.clicked.connect(self.reject)
+        self.register_button.clicked.connect(self._open_register_page)
 
     def attempt_login(self):
         """
@@ -133,7 +140,9 @@ class LoginDialog(QDialog):
         else:  # LoginStatus.UNKNOWN_ERROR
             self.tips_label.setText("发生未知错误，请稍后重试。")
 
-    def closeEvent(self, event):
+    def _open_register_page(self):
+        register_url = f"{API_BASE_URL.rstrip('/')}/register"
+        webbrowser.open(register_url)
         """确保在用户强行关闭对话框时，后台线程也能被妥善停止"""
         if hasattr(self, 'worker_thread') and self.worker_thread and self.worker_thread.isRunning():
             print("LoginDialog: 用户关闭窗口，正在尝试停止仍在运行的登录线程...")

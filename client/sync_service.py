@@ -59,9 +59,9 @@ class ApiSyncWorker(QObject):
     finished = Signal()
     status_updated = Signal(str)
 
-    def __init__(self, parent_window, interval_seconds: int = 60):
+    def __init__(self, token_provider, interval_seconds: int = 60):
         super().__init__()
-        self.main_window = parent_window
+        self._token_provider = token_provider
         self.interval = interval_seconds * 1000
         self._timer = None
         self._running = False
@@ -85,7 +85,7 @@ class ApiSyncWorker(QObject):
         if not self._running:
             return
         print("\n--- [Sync Service] QTimer 触发新一轮后台同步检查 ---")
-        token = getattr(self.main_window, "token", None)
+        token = self._token_provider() if self._token_provider else None
         if not token:
             self.status_updated.emit("未登录，跳过后台同步。")
             return
@@ -116,7 +116,7 @@ class ApiSyncWorker(QObject):
                 print("[Sync Service] 停止定时器时异常:", e)
         # 清理 timer 对象
         if self._timer:
-        # 添加安全延迟，确保定时器完全停止
+            # 添加安全延迟，确保定时器完全停止
             QTimer.singleShot(100, self._safe_delete_timer)
         else:
             self.finished.emit()
