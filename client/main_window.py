@@ -1,18 +1,20 @@
 import time
 
 from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QDialog, QPushButton, QLabel,
-    QWidget, QVBoxLayout, QHBoxLayout, QTableWidget
+    QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QSystemTrayIcon, QMenu, QStyle
 )
 
 from app_repository import AppRepository
 from table_manager import AppTableManager
 from monitor_controller import MonitorController
 from sync_controller import SyncController
+from settings import Settings
+from settings_dialog import CloseAskDialog, SettingsDialog
 
-from dialogs import AppDetailDialog, ClosingDialog
-from proc_dialog import ProcSelectDialog
+from dialogs import AppDetailDialog, ClosingDialog, AddAppDialog
 from login_dialog import LoginDialog
 from sync_service import get_and_prepare_sync_data, mark_activities_as_synced
 from client_api import send_data_to_api
@@ -40,11 +42,13 @@ class Mywindow(QMainWindow):
         bottom_layout.setSpacing(10)
 
         self.pushButton_procs = QPushButton("添加进程")
+        self.settings_button = QPushButton("设置")
         self.login_button = QPushButton("登录")
         self.user_label = QLabel("账号：")
         self.user_show = QLabel("N/A")
 
         bottom_layout.addWidget(self.pushButton_procs)
+        bottom_layout.addWidget(self.settings_button)
         bottom_layout.addWidget(self.login_button)
         bottom_layout.addWidget(self.user_label)
         bottom_layout.addWidget(self.user_show)
@@ -56,10 +60,12 @@ class Mywindow(QMainWindow):
         self.token = None
         self.username = None
         self._is_closing = False
+        self._settings = Settings()
 
         # ---- 组装子模块 ----
         self.table_manager = AppTableManager(self.tableWidget, self)
         self.table_manager.detail_requested.connect(self._on_detail_requested)
+        self.table_manager.launch_requested.connect(self._on_launch_requested)
         self.table_manager.delete_requested.connect(self._on_delete_requested)
 
         self.monitor_controller = MonitorController(self)
@@ -68,9 +74,13 @@ class Mywindow(QMainWindow):
         self.sync_controller = SyncController(token_provider=lambda: self.token, parent=self)
         self.sync_controller.status_updated.connect(self.update_status_bar)
 
+        # ---- 系统托盘 ----
+        self._setup_tray_icon()
+
         # ---- 信号连接 ----
         self.login_button.clicked.connect(self.open_login_dialog)
         self.pushButton_procs.clicked.connect(self.open_add_app_dialog)
+        self.settings_button.clicked.connect(self.open_settings_dialog)
 
         # ---- 启动 ----
         self.user_show.setText("未登录")
@@ -80,6 +90,37 @@ class Mywindow(QMainWindow):
         self.monitor_controller.start(AppRepository.get_watched_apps_info())
         self.sync_controller.start()
 
+    def _setup_tray_icon(self):
+        default_icon = self.style().standardIcon(QStyle.SP_ComputerIcon)
+        self._tray_icon = QSystemTrayIcon(default_icon, self)
+
+        tray_menu = QMenu()
+        action_show = tray_menu.addAction("显示主窗口")
+        tray_menu.addSeparator()
+        action_settings = tray_menu.addAction("设置...")
+        tray_menu.addSeparator()
+        action_exit = tray_menu.addAction("退出")
+
+        action_show.triggered.connect(self._tray_show_window)
+        action_settings.triggered.connect(self.open_settings_dialog)
+        action_exit.triggered.connect(self._tray_exit_app)
+
+        self._tray_icon.setContextMenu(tray_menu)
+        self._tray_icon.activated.connect(self._on_tray_activated)
+        self._tray_icon.show()
+
+    def _on_tray_activated(self, reason):
+        if reason == QSystemTrayIcon.DoubleClick:
+            self._tray_show_window()
+
+    def _tray_show_window(self):
+        self.showNormal()
+        self.activateWindow()
+
+    def _tray_exit_app(self):
+        self._is_closing = True
+        self.close()
+
     def _refresh_table(self):
         apps = AppRepository.get_all_apps()
         self.table_manager.refresh(apps)
@@ -88,9 +129,9 @@ class Mywindow(QMainWindow):
         self.monitor_controller.update_watch_list(AppRepository.get_watched_apps_info())
 
     def open_add_app_dialog(self):
-        dialog = ProcSelectDialog(self)
+        dialog = AddAppDialog(self)
         if dialog.exec() == QDialog.Accepted:
-            selected_info = dialog.get_selected_proc_info()
+            selected_info = dialog.get_selected_info()
             if selected_info:
                 exe_path, exe_name = selected_info
                 if not AppRepository.app_exists(exe_path):
@@ -107,6 +148,13 @@ class Mywindow(QMainWindow):
             dialog = AppDetailDialog(app_data, self)
             dialog.exec()
 
+    def _on_launch_requested(self, exe_path: str):
+        import os
+        try:
+            os.startfile(exe_path)
+        except Exception:
+            pass
+
     def _on_delete_requested(self, exe_path: str, exe_name: str):
         AppRepository.delete_app_by_path(exe_path)
         self._refresh_table()
@@ -120,6 +168,9 @@ class Mywindow(QMainWindow):
             self.user_show.setText(self.username)
             self.run_immediate_sync()
 
+    def open_settings_dialog(self):
+        SettingsDialog(self).exec()
+
     def run_immediate_sync(self):
         if not self.token:
             return
@@ -131,12 +182,42 @@ class Mywindow(QMainWindow):
     def update_status_bar(self, msg: str):
         self.statusBar().showMessage(msg, 5000)
 
-    # 退出
+    # ---- 关闭逻辑 ----
     def closeEvent(self, event):
         if self._is_closing:
             event.accept()
             return
-        self._is_closing = True
+
+        close_behavior = self._settings.get("closeToTray")
+
+        if close_behavior is None:
+            event.ignore()
+            QTimer.singleShot(0, lambda: self._ask_close_behavior(event))
+        elif close_behavior == "tray":
+            event.ignore()
+            self.hide()
+        else:
+            event.ignore()
+            self._is_closing = True
+            self._do_graceful_shutdown()
+
+    def _ask_close_behavior(self, original_event):
+        dialog = CloseAskDialog(self)
+        dialog.exec()
+
+        if dialog.choice == "tray":
+            if dialog.remember_check.isChecked():
+                self._settings.set("closeToTray", "tray")
+            self.hide()
+        elif dialog.choice == "exit":
+            if dialog.remember_check.isChecked():
+                self._settings.set("closeToTray", "exit")
+            self._is_closing = True
+            self._do_graceful_shutdown()
+        else:
+            pass
+
+    def _do_graceful_shutdown(self):
         self._closing_dialog = ClosingDialog(self)
         self._closing_dialog.show()
         for _ in range(5):
@@ -156,10 +237,10 @@ class Mywindow(QMainWindow):
         self._closing_dialog.set_status("保存完成，正在关闭...")
         QApplication.processEvents()
         QTimer.singleShot(300, self._finish_close_event)
-        event.ignore()
 
     def _finish_close_event(self):
         if self._closing_dialog:
             self._closing_dialog.close()
             self._closing_dialog = None
+        self._tray_icon.hide()
         self.close()

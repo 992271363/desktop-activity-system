@@ -1,9 +1,9 @@
 import webbrowser
 
-from PySide6.QtCore import QObject, Signal, QThread
+from PySide6.QtCore import QObject, Signal, QThread, Qt
 from PySide6.QtWidgets import (
     QDialog, QPushButton, QLabel, QLineEdit,
-    QHBoxLayout, QVBoxLayout, QWidget
+    QHBoxLayout, QVBoxLayout, QFormLayout
 )
 
 from client_api import api_login, LoginStatus, BASE_URL
@@ -28,60 +28,55 @@ class LoginDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("登录")
-        self.setFixedSize(300, 170)
+        self.setFixedSize(300, 240)
 
+        # ---- 主布局 ----
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(20, 15, 20, 10)
-        main_layout.setSpacing(8)
+        main_layout.setContentsMargins(24, 20, 24, 16)
+        main_layout.setSpacing(12)
 
-        # 输入区域
-        input_layout = QHBoxLayout()
-        label_layout = QVBoxLayout()
-        label_layout.addWidget(QLabel("账号："))
-        label_layout.addWidget(QLabel("密码："))
-        input_layout.addLayout(label_layout)
-
-        field_layout = QVBoxLayout()
+        # ---- 输入区域（QFormLayout 自动对齐） ----
+        form_layout = QFormLayout()
+        form_layout.setSpacing(8)
         self.user_input = QLineEdit()
         self.pass_input = QLineEdit()
         self.pass_input.setEchoMode(QLineEdit.Password)
-        field_layout.addWidget(self.user_input)
-        field_layout.addWidget(self.pass_input)
-        input_layout.addLayout(field_layout)
-        main_layout.addLayout(input_layout)
+        form_layout.addRow("账号：", self.user_input)
+        form_layout.addRow("密码：", self.pass_input)
+        main_layout.addLayout(form_layout)
 
-        # 按钮区域：确认 | 取消 | 前往注册
+        # ---- 确认 / 取消按钮 ----
         btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(6)
-
+        btn_layout.setSpacing(16)
         self.login_accept = QPushButton("确认")
-        self.login_accept.setFixedWidth(60)
-        btn_layout.addWidget(self.login_accept)
-
         self.login_reject = QPushButton("取消")
         self.login_reject.setProperty("secondary", True)
-        self.login_reject.setFixedWidth(60)
-        btn_layout.addWidget(self.login_reject)
-
         btn_layout.addStretch()
-
-        self.register_button = QPushButton("前往注册")
-        self.register_button.setProperty("secondary", True)
-        self.register_button.setFixedWidth(72)
-        btn_layout.addWidget(self.register_button)
-
+        btn_layout.addWidget(self.login_accept)
+        btn_layout.addWidget(self.login_reject)
+        btn_layout.addStretch()
         main_layout.addLayout(btn_layout)
 
-        # 提示标签
-        self.tips_label = QLabel("")
+        # ---- 前往注册按钮 ----
+        reg_layout = QHBoxLayout()
+        self.register_button = QPushButton("前往注册")
+        self.register_button.setProperty("secondary", True)
+        reg_layout.addStretch()
+        reg_layout.addWidget(self.register_button)
+        reg_layout.addStretch()
+        main_layout.addLayout(reg_layout)
+
+        # ---- 提示标签 ----
+        self.tips_label = QLabel("", self)
+        self.tips_label.setAlignment(Qt.AlignCenter)
         main_layout.addWidget(self.tips_label)
 
-        # 状态
+        # ---- 状态 ----
         self.token = None
         self.username = None
         self.worker_thread = None
 
-        # 信号连接
+        # ---- 信号连接 ----
         self.login_accept.clicked.connect(self.attempt_login)
         self.login_reject.clicked.connect(self.reject)
         self.register_button.clicked.connect(self._open_register_page)

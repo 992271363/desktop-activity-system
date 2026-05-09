@@ -12,6 +12,8 @@ class AppInfo:
     exe_name: str
     total_focus_seconds: int
     total_lifetime_seconds: int
+    last_start_at: str
+    first_seen_at: str
 
 
 class AppRepository:
@@ -27,6 +29,8 @@ class AppRepository:
                     exe_name=app.executable_name,
                     total_focus_seconds=app.summary.total_focus_time_seconds if app.summary else 0,
                     total_lifetime_seconds=app.summary.total_lifetime_seconds if app.summary else 0,
+                    last_start_at=app.summary.last_seen_start_at.strftime("%Y/%m/%d %H:%M") if app.summary and app.summary.last_seen_start_at else "从未",
+                    first_seen_at=app.summary.first_seen_at.strftime("%Y/%m/%d %H:%M") if app.summary and app.summary.first_seen_at else "从未",
                 )
                 for app in apps
             ]

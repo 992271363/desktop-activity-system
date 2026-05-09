@@ -1,0 +1,166 @@
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QCheckBox, QFormLayout, QSpinBox, QGroupBox, QDialogButtonBox,
+    QComboBox
+)
+
+from settings import Settings
+
+
+class AlwaysDownComboBox(QComboBox):
+    def showPopup(self):
+        super().showPopup()
+        popup = self.findChild(QComboBox)
+        if popup is None and self.view() and self.view().window():
+            popup_geo = self.view().window().geometry()
+            new_y = self.mapToGlobal(self.rect().bottomLeft()).y()
+            self.view().window().move(popup_geo.x(), new_y)
+
+
+class CloseAskDialog(QDialog):
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("确认关闭")
+        self.setFixedSize(340, 150)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 18, 20, 12)
+        layout.setSpacing(12)
+
+        hint = QLabel("您希望关闭程序还是最小化到系统托盘？")
+        layout.addWidget(hint)
+
+        self.remember_check = QCheckBox("记住我的选择，不再询问")
+        layout.addWidget(self.remember_check)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(10)
+
+        self.btn_tray = QPushButton("最小化到托盘")
+        self.btn_tray.setMinimumWidth(110)
+        btn_layout.addWidget(self.btn_tray)
+
+        btn_layout.addStretch()
+
+        self.btn_exit = QPushButton("退出程序")
+        self.btn_exit.setProperty("secondary", True)
+        self.btn_exit.setMinimumWidth(90)
+        btn_layout.addWidget(self.btn_exit)
+
+        layout.addLayout(btn_layout)
+
+        self.choice = None
+
+        self.btn_tray.clicked.connect(self._choose_tray)
+        self.btn_exit.clicked.connect(self._choose_exit)
+
+    def _choose_tray(self):
+        self.choice = "tray"
+        self.accept()
+
+    def _choose_exit(self):
+        self.choice = "exit"
+        self.accept()
+
+
+class SettingsDialog(QDialog):
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("设置")
+        self.setMinimumWidth(380)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowContextHelpButtonHint)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 14, 16, 10)
+        layout.setSpacing(10)
+
+        # --- 关闭行为 ---
+        close_group = QGroupBox("关闭行为")
+        close_form = QFormLayout(close_group)
+        close_form.setContentsMargins(10, 18, 10, 8)
+
+        self.combo_close_action = AlwaysDownComboBox()
+        self.combo_close_action.addItem("每次询问", "ask")
+        self.combo_close_action.addItem("最小化到托盘", "tray")
+        self.combo_close_action.addItem("退出程序", "exit")
+
+        saved = Settings().get("closeToTray")
+        if saved == "tray":
+            self.combo_close_action.setCurrentIndex(1)
+        elif saved == "exit":
+            self.combo_close_action.setCurrentIndex(2)
+        else:
+            self.combo_close_action.setCurrentIndex(0)
+
+        close_form.addRow("点击关闭按钮时:", self.combo_close_action)
+        layout.addWidget(close_group)
+
+        # --- 通用 ---
+        general_group = QGroupBox("通用")
+        general_form = QFormLayout(general_group)
+        general_form.setContentsMargins(10, 16, 10, 8)
+
+        self.check_autostart = QCheckBox("开机自动启动")
+        self.check_autostart.setEnabled(False)
+        self.check_autostart.setToolTip("待实现")
+        general_form.addRow(self.check_autostart)
+
+        self.spin_sync_interval = QSpinBox()
+        self.spin_sync_interval.setRange(10, 600)
+        self.spin_sync_interval.setSuffix(" 秒")
+        self.spin_sync_interval.setValue(60)
+        self.spin_sync_interval.setEnabled(False)
+        self.spin_sync_interval.setToolTip("待实现")
+        general_form.addRow("同步间隔:", self.spin_sync_interval)
+
+        layout.addWidget(general_group)
+
+        # --- 显示 ---
+        display_group = QGroupBox("显示")
+        display_form = QFormLayout(display_group)
+        display_form.setContentsMargins(10, 16, 10, 8)
+
+        self.check_show_tray = QCheckBox("显示系统托盘图标")
+        self.check_show_tray.setEnabled(False)
+        self.check_show_tray.setToolTip("待实现")
+        self.check_show_tray.setChecked(True)
+        display_form.addRow(self.check_show_tray)
+
+        self.check_dark_mode = QCheckBox("深色模式")
+        self.check_dark_mode.setEnabled(False)
+        self.check_dark_mode.setToolTip("待实现")
+        display_form.addRow(self.check_dark_mode)
+
+        layout.addWidget(display_group)
+
+        # --- 数据 ---
+        data_group = QGroupBox("数据")
+        data_form = QFormLayout(data_group)
+        data_form.setContentsMargins(10, 16, 10, 8)
+
+        self.btn_clear_data = QPushButton("清除本地数据")
+        self.btn_clear_data.setEnabled(False)
+        self.btn_clear_data.setToolTip("待实现")
+        data_form.addRow(self.btn_clear_data)
+
+        layout.addWidget(data_group)
+
+        layout.addStretch()
+
+        # --- 底部按钮 ---
+        btn_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btn_box.accepted.connect(self._on_accept)
+        btn_box.rejected.connect(self.reject)
+        layout.addWidget(btn_box)
+
+    def _on_accept(self):
+        close_value = self.combo_close_action.currentData()
+        if close_value == "ask":
+            Settings().set("closeToTray", None)
+        else:
+            Settings().set("closeToTray", close_value)
+        self.accept()

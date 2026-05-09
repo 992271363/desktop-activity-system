@@ -1,12 +1,73 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog, QFormLayout, QLabel, QFrame, QDialogButtonBox,
-    QVBoxLayout, QProgressBar
+    QVBoxLayout, QProgressBar, QPushButton, QHBoxLayout, QFileDialog
 )
 from PySide6.QtGui import QFont
+import os
 
 from local_models import WatchedApplication
 from utils import format_seconds_to_text
+from proc_dialog import ProcSelectDialog
+
+
+class AddAppDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("添加监控应用")
+        self.setFixedSize(320, 140)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(25, 20, 25, 20)
+        layout.setSpacing(15)
+
+        hint = QLabel("请选择添加方式：")
+        layout.addWidget(hint)
+
+        btn_layout = QHBoxLayout()
+        btn_layout.setSpacing(12)
+
+        self.btn_from_process = QPushButton("从运行进程选择")
+        self.btn_from_process.setMinimumHeight(36)
+        btn_layout.addWidget(self.btn_from_process)
+
+        self.btn_from_file = QPushButton("从本地文件选择")
+        self.btn_from_file.setMinimumHeight(36)
+        btn_layout.addWidget(self.btn_from_file)
+
+        layout.addLayout(btn_layout)
+
+        self.selected_info = None
+
+        self.btn_from_process.clicked.connect(self._choose_from_process)
+        self.btn_from_file.clicked.connect(self._choose_from_file)
+
+    def _choose_from_process(self):
+        dialog = ProcSelectDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            info = dialog.get_selected_proc_info()
+            if info:
+                self.selected_info = info
+                self.accept()
+            else:
+                self.reject()
+        else:
+            self.reject()
+
+    def _choose_from_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "选择可执行文件", "",
+            "可执行文件 (*.exe *.bat *.cmd *.ps1 *.vbs);;所有文件 (*.*)"
+        )
+        if file_path:
+            exe_name = os.path.splitext(os.path.basename(file_path))[0]
+            self.selected_info = (file_path, exe_name)
+            self.accept()
+        else:
+            self.reject()
+
+    def get_selected_info(self):
+        return self.selected_info
 
 
 class AppDetailDialog(QDialog):
