@@ -27,7 +27,7 @@ class Mywindow(QMainWindow):
 
         # ---- UI 初始化 ----
         self.setWindowTitle("desktopActivitySystem")
-        self.resize(925, 382)
+        self.resize(1100, 450)
 
         central = QWidget(self)
         self.setCentralWidget(central)
@@ -63,10 +63,11 @@ class Mywindow(QMainWindow):
         self._settings = Settings()
 
         # ---- 组装子模块 ----
-        self.table_manager = AppTableManager(self.tableWidget, self)
+        self.table_manager = AppTableManager(self.tableWidget, self, self._settings)
         self.table_manager.detail_requested.connect(self._on_detail_requested)
         self.table_manager.launch_requested.connect(self._on_launch_requested)
         self.table_manager.delete_requested.connect(self._on_delete_requested)
+        self.table_manager.table_width_hint.connect(self._adjust_window_width)
 
         self.monitor_controller = MonitorController(self)
         self.monitor_controller.status_updated.connect(self.table_manager.update_status)
@@ -124,6 +125,11 @@ class Mywindow(QMainWindow):
     def _refresh_table(self):
         apps = AppRepository.get_all_apps()
         self.table_manager.refresh(apps)
+
+    def _adjust_window_width(self, table_content_width: int):
+        margins = self.centralWidget().layout().contentsMargins()
+        extra = margins.left() + margins.right() + self.centralWidget().layout().spacing()
+        self.resize(table_content_width + extra, self.height())
 
     def _refresh_monitor_list(self):
         self.monitor_controller.update_watch_list(AppRepository.get_watched_apps_info())

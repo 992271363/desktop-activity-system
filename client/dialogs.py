@@ -73,14 +73,14 @@ class AddAppDialog(QDialog):
 class AppDetailDialog(QDialog):
     def __init__(self, app_data: WatchedApplication, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(f"详细信息 - {app_data.executable_name}")
+        self.setWindowTitle(f"详细信息 - {os.path.splitext(app_data.executable_name)[0]}")
         self.resize(400, 300)
 
         layout = QFormLayout(self)
         layout.setLabelAlignment(Qt.AlignRight)
         layout.setContentsMargins(30, 20, 30, 20)
-
-        layout.addRow("<b>应用名称:</b>", QLabel(app_data.executable_name))
+        name_without_ext = os.path.splitext(app_data.executable_name)[0]
+        layout.addRow("<b>应用名称:</b>", QLabel(name_without_ext))
 
         line = QFrame()
         line.setFrameShape(QFrame.HLine)

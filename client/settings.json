@@ -1,3 +1,5 @@
 {
-  "closeToTray": "exit"
+  "closeToTray": "exit",
+  "tableSortColumn": 0,
+  "tableSortOrder": "desc"
 }

@@ -161,16 +161,40 @@ class GlobalMonitorWorker(QObject):
     def _emit_status(self):
         status_data = {}
         now = datetime.datetime.now()
+        grouped = {}
         for pid, session in self._active_sessions.items():
             path = session.exe_path
-            name = session.exe_name
-            runtime_seconds = int((now - session.start_time).total_seconds())
+            if path not in grouped:
+                grouped[path] = []
+            grouped[path].append((pid, session))
+
+        for path, sessions in grouped.items():
+            total_focus = 0
+            max_runtime = 0
+            earliest_start = None
+            is_focused = False
+            focused_pid = None
+            name = sessions[0][1].exe_name
+
+            for pid, session in sessions:
+                total_focus += int(session.focus_seconds)
+                runtime = int((now - session.start_time).total_seconds())
+                if runtime > max_runtime:
+                    max_runtime = runtime
+                    earliest_start = session.start_time
+                if session.is_focused:
+                    is_focused = True
+                    focused_pid = pid
+
+            if earliest_start is None:
+                earliest_start = sessions[0][1].start_time
+
             status_data[path] = {
                 "name": name,
-                "pid": pid,
-                "focus": int(session.focus_seconds),
-                "runtime_seconds": runtime_seconds,
-                "start_str": session.start_time.strftime("%H:%M:%S"),
-                "is_focused": session.is_focused
+                "pid": focused_pid if focused_pid else sessions[0][0],
+                "focus": total_focus,
+                "runtime_seconds": max_runtime,
+                "start_str": earliest_start.strftime("%H:%M:%S"),
+                "is_focused": is_focused
             }
         self.status_updated.emit(status_data)
