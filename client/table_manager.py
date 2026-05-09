@@ -282,10 +282,10 @@ class AppTableManager(QObject):
         if max_width > 0:
             self.table.setColumnWidth(1, max_width + 40)
 
-    def _emit_table_width_hint(self):
+    def _emit_table_width_hint(self):   
         total = 0
         for col in range(self.table.columnCount()):
             total += self.table.columnWidth(col)
         if self.table.verticalScrollBar().isVisible():
             total += self.table.verticalScrollBar().width()
-        self.table_width_hint.emit(total+27)
+        self.table_width_hint.emit(total+50)
