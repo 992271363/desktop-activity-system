@@ -80,6 +80,28 @@ QPushButton[danger="true"]:hover {
     background-color: #dc2626;
 }
 
+/* 拾取窗口按钮 */
+QPushButton[crosshair="true"] {
+    background-color: #f0fdf4;
+    color: #16a34a;
+    border: 1.5px dashed #86efac;
+    border-radius: 6px;
+    padding: 6px 16px;
+    min-height: 28px;
+    font-weight: 500;
+}
+
+QPushButton[crosshair="true"]:hover {
+    background-color: #dcfce7;
+    border-color: #4ade80;
+}
+
+QPushButton[crosshair="true"]:pressed {
+    background-color: #bbf7d0;
+    border-color: #22c55e;
+    border-style: solid;
+}
+
 /* ---- 输入框 ---- */
 QLineEdit {
     background-color: #ffffff;

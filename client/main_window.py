@@ -1,7 +1,11 @@
 import time
+import psutil
+import win32gui
+import win32con
+import win32process
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtGui import QAction, QIcon, QMouseEvent
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QDialog, QPushButton, QLabel,
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QSystemTrayIcon, QMenu, QStyle
@@ -42,12 +46,16 @@ class Mywindow(QMainWindow):
         bottom_layout.setSpacing(10)
 
         self.pushButton_procs = QPushButton("添加进程")
+        self.btn_crosshair = QPushButton("拾取窗口")
+        self.btn_crosshair.setToolTip("按住后拖动到目标窗口上松开，自动添加监控")
+        self.btn_crosshair.setProperty("crosshair", True)
         self.settings_button = QPushButton("设置")
         self.login_button = QPushButton("登录")
         self.user_label = QLabel("账号：")
         self.user_show = QLabel("N/A")
 
         bottom_layout.addWidget(self.pushButton_procs)
+        bottom_layout.addWidget(self.btn_crosshair)
         bottom_layout.addWidget(self.settings_button)
         bottom_layout.addWidget(self.login_button)
         bottom_layout.addWidget(self.user_label)
@@ -60,6 +68,7 @@ class Mywindow(QMainWindow):
         self.token = None
         self.username = None
         self._is_closing = False
+        self._crosshair_active = False
         self._settings = Settings()
 
         # ---- 组装子模块 ----
@@ -81,6 +90,7 @@ class Mywindow(QMainWindow):
         # ---- 信号连接 ----
         self.login_button.clicked.connect(self.open_login_dialog)
         self.pushButton_procs.clicked.connect(self.open_add_app_dialog)
+        self.btn_crosshair.pressed.connect(self._on_crosshair_pressed)
         self.settings_button.clicked.connect(self.open_settings_dialog)
 
         # ---- 启动 ----
@@ -165,6 +175,62 @@ class Mywindow(QMainWindow):
         AppRepository.delete_app_by_path(exe_path)
         self._refresh_table()
         self._refresh_monitor_list()
+
+    def _on_crosshair_pressed(self):
+        self._crosshair_active = True
+        self.grabMouse()
+        QApplication.setOverrideCursor(Qt.CrossCursor)
+        self.statusBar().showMessage("拖动到目标窗口上松开即可添加…")
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        if self._crosshair_active:
+            self._crosshair_active = False
+            self.releaseMouse()
+            QApplication.restoreOverrideCursor()
+            self.statusBar().clearMessage()
+            self._pick_window_at(event.globalPosition().toPoint())
+            return
+        super().mouseReleaseEvent(event)
+
+    def _pick_window_at(self, screen_pos):
+        hwnd = win32gui.WindowFromPoint((screen_pos.x(), screen_pos.y()))
+        if not hwnd:
+            self.statusBar().showMessage("未找到窗口", 3000)
+            return
+
+        root = win32gui.GetAncestor(hwnd, win32con.GA_ROOT)
+        if root:
+            hwnd = root
+
+        try:
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        except Exception:
+            self.statusBar().showMessage("无法获取进程信息", 3000)
+            return
+
+        if pid in (0, 4):
+            self.statusBar().showMessage("系统进程，已跳过", 3000)
+            return
+
+        try:
+            proc = psutil.Process(pid)
+            exe_path = proc.exe()
+            exe_name = proc.name()
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            self.statusBar().showMessage("无法读取进程路径", 3000)
+            return
+
+        if not exe_path:
+            self.statusBar().showMessage("无法读取进程路径", 3000)
+            return
+
+        if not AppRepository.app_exists(exe_path):
+            AppRepository.add_app(exe_path, exe_name)
+            self.statusBar().showMessage(f"已添加: {exe_name}", 3000)
+            self._refresh_table()
+            self._refresh_monitor_list()
+        else:
+            self.statusBar().showMessage("该应用已在监控列表中", 3000)
 
     def open_login_dialog(self):
         dialog = LoginDialog(self)
