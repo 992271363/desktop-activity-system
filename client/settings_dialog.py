@@ -2,11 +2,12 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QCheckBox, QFormLayout, QSpinBox, QGroupBox, QDialogButtonBox,
-    QComboBox
+    QComboBox, QRadioButton, QButtonGroup
 )
 
 from settings import Settings
 import autostart
+from theme import apply_theme
 
 
 class AlwaysDownComboBox(QComboBox):
@@ -134,10 +135,28 @@ class SettingsDialog(QDialog):
         self.check_show_tray.setChecked(True)
         display_form.addRow(self.check_show_tray)
 
-        self.check_dark_mode = QCheckBox("深色模式")
-        self.check_dark_mode.setEnabled(False)
-        self.check_dark_mode.setToolTip("待实现")
-        display_form.addRow(self.check_dark_mode)
+        theme_label = QLabel("主题:")
+        self.radio_light = QRadioButton("浅色模式")
+        self.radio_dark = QRadioButton("深色模式")
+        self.radio_system = QRadioButton("跟随系统")
+        self.theme_group = QButtonGroup(self)
+        self.theme_group.addButton(self.radio_light)
+        self.theme_group.addButton(self.radio_dark)
+        self.theme_group.addButton(self.radio_system)
+
+        current_theme = Settings().get("themeMode", "system")
+        if current_theme == "light":
+            self.radio_light.setChecked(True)
+        elif current_theme == "dark":
+            self.radio_dark.setChecked(True)
+        else:
+            self.radio_system.setChecked(True)
+
+        theme_layout = QHBoxLayout()
+        theme_layout.addWidget(self.radio_light)
+        theme_layout.addWidget(self.radio_dark)
+        theme_layout.addWidget(self.radio_system)
+        display_form.addRow(theme_label, theme_layout)
 
         layout.addWidget(display_group)
 
@@ -173,5 +192,12 @@ class SettingsDialog(QDialog):
                 autostart.enable()
             else:
                 autostart.disable()
+
+        if self.radio_light.isChecked():
+            apply_theme("light")
+        elif self.radio_dark.isChecked():
+            apply_theme("dark")
+        else:
+            apply_theme("system")
 
         self.accept()

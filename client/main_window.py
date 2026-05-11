@@ -20,6 +20,7 @@ from monitor_controller import MonitorController
 from sync_controller import SyncController
 from settings import Settings
 from settings_dialog import CloseAskDialog, SettingsDialog
+from size_grip import StyledSizeGrip
 
 from dialogs import AppDetailDialog, ClosingDialog, AddAppDialog
 from login_dialog import LoginDialog
@@ -126,6 +127,9 @@ class Mywindow(QMainWindow):
         self.logout_action.triggered.connect(self._logout)
 
         # ---- 启动 ----
+        self.statusBar().setSizeGripEnabled(False)
+        self._size_grip = StyledSizeGrip(self.statusBar())
+        self.statusBar().addPermanentWidget(self._size_grip)
         self.statusBar().showMessage("系统就绪，正在初始化...", 3000)
 
         self._refresh_table()

@@ -3,6 +3,8 @@ from PySide6.QtWidgets import QApplication # Qt应用入口类
 from main_window import Mywindow # 自定义主窗口
 from local_database import create_db_and_tables # 数据库初始化工具
 from styles import MODERN_LIGHT_QSS # 全局QSS样式表
+from settings import Settings
+from theme import apply_theme
 import autostart
 
 if __name__ == "__main__": # 程序主入口
@@ -15,7 +17,7 @@ if __name__ == "__main__": # 程序主入口
 
     app = QApplication(sys.argv) # 创建Qt应用实例
     app.setStyle("Fusion") # 设置跨平台统一风格
-    app.setStyleSheet(MODERN_LIGHT_QSS) # 应用自定义样式
+    apply_theme(Settings().get("themeMode", "system")) # 应用主题
     window = Mywindow() # 实例化主窗口
     window.show() # 显示窗口
     sys.exit(app.exec()) # 进入事件循环并返回退出码
