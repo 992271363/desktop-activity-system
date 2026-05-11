@@ -73,6 +73,23 @@ QDialogButtonBox QPushButton:pressed {
     background-color: #cbd5e1;
 }
 
+/* 设置按钮 */
+QPushButton[settings="true"] {
+    background-color: #e2e8f0;
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+}
+
+QPushButton[settings="true"]:hover {
+    background-color: #cbd5e1;
+    border-color: #94a3b8;
+}
+
+QPushButton[settings="true"]:pressed {
+    background-color: #94a3b8;
+}
+
 /* 危险/删除按钮 */
 QPushButton[danger="true"] {
     background-color: #ef4444;
@@ -392,6 +409,23 @@ QDialogButtonBox QPushButton:hover {
 
 QPushButton[secondary="true"]:pressed,
 QDialogButtonBox QPushButton:pressed {
+    background-color: #64748b;
+}
+
+/* 设置按钮 */
+QPushButton[settings="true"] {
+    background-color: #334155;
+    color: #94a3b8;
+    border: 1px solid #475569;
+    border-radius: 8px;
+}
+
+QPushButton[settings="true"]:hover {
+    background-color: #475569;
+    border-color: #64748b;
+}
+
+QPushButton[settings="true"]:pressed {
     background-color: #64748b;
 }
 

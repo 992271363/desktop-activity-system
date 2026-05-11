@@ -79,7 +79,7 @@ class Mywindow(QMainWindow):
             base = os.path.dirname(os.path.abspath(__file__))
         gear_path = os.path.join(base, "icons", "gear.svg")
         self.settings_button.setIcon(QIcon(gear_path))
-        self.settings_button.setProperty("secondary", True)
+        self.settings_button.setProperty("settings", True)
         self.settings_button.setFixedSize(44, 44)
         self.settings_button.setIconSize(QSize(22, 22))
         toolbar.addWidget(self.settings_button)
