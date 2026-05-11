@@ -1,6 +1,6 @@
 from pathlib import Path
 from PySide6.QtCore import Qt, Signal, QObject, QCollator
-from PySide6.QtGui import QFontMetrics
+from PySide6.QtGui import QFontMetrics, QColor, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
     QMenu, QMessageBox, QWidget, QHBoxLayout, QLabel
@@ -15,6 +15,70 @@ _collator = QCollator()
 _collator.setCaseSensitivity(Qt.CaseInsensitive)
 
 _NOT_RUNNING = -1
+
+
+class StyledHeaderView(QHeaderView):
+    _ARROW_COLOR = QColor(0x47, 0x55, 0x69)
+    _DIVIDER_COLOR = QColor(0x94, 0xa3, 0xb8)
+    _GRIP_ZONE = 6
+
+    def __init__(self, orientation, parent=None):
+        super().__init__(orientation, parent)
+        self.setSectionsClickable(True)
+        self.setSortIndicatorShown(True)
+        self.setMouseTracking(True)
+
+    def _is_on_resizable_edge(self, pos):
+        col = self.logicalIndexAt(pos)
+        if col < 0:
+            return False
+        edge_x = self.sectionPosition(col) + self.sectionSize(col)
+        return abs(pos.x() - edge_x) <= self._GRIP_ZONE
+
+    def paintSection(self, painter, rect, logicalIndex):
+        super().paintSection(painter, rect, logicalIndex)
+
+        if logicalIndex == 1:
+            painter.save()
+            painter.setPen(QPen(self._DIVIDER_COLOR, 2))
+            painter.drawLine(rect.right(), rect.top() + 4, rect.right(), rect.bottom() - 4)
+            painter.restore()
+
+        if logicalIndex == self.sortIndicatorSection():
+            painter.save()
+            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(self._ARROW_COLOR)
+            order = self.sortIndicatorOrder()
+            size = 5
+            cx = rect.right() - 14
+            cy = rect.center().y()
+            if order == Qt.AscendingOrder:
+                path = QPainterPath()
+                path.moveTo(cx - size, cy + 2)
+                path.lineTo(cx + size, cy + 2)
+                path.lineTo(cx, cy - size + 2)
+                path.closeSubpath()
+                painter.drawPath(path)
+            else:
+                path = QPainterPath()
+                path.moveTo(cx - size, cy - 2)
+                path.lineTo(cx + size, cy - 2)
+                path.lineTo(cx, cy + size - 2)
+                path.closeSubpath()
+                painter.drawPath(path)
+            painter.restore()
+
+    def mouseMoveEvent(self, event):
+        if self._is_on_resizable_edge(event.pos()):
+            self.setCursor(Qt.SplitHCursor)
+        else:
+            self.setCursor(Qt.ArrowCursor)
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event):
+        self.setCursor(Qt.ArrowCursor)
+        super().leaveEvent(event)
 
 
 class SortableTableWidgetItem(QTableWidgetItem):
@@ -55,9 +119,12 @@ class AppTableManager(QObject):
     def _setup_table(self):
         columns = ["状态", "应用名称", "本次焦点", "本次运行", "最后一次启动", "首次启动", "总焦点时长", "总运行时长"]
         self.table.setColumnCount(len(columns))
-        self.table.setHorizontalHeaderLabels(columns)
 
-        header = self.table.horizontalHeader()
+        header = StyledHeaderView(Qt.Horizontal, self.table)
+        self.table.setHorizontalHeader(header)
+        self.table.setHorizontalHeaderLabels(columns)
+        header.setSectionsClickable(True)
+        header.setSortIndicatorShown(True)
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(1, QHeaderView.Interactive)
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
@@ -288,4 +355,4 @@ class AppTableManager(QObject):
             total += self.table.columnWidth(col)
         if self.table.verticalScrollBar().isVisible():
             total += self.table.verticalScrollBar().width()
-        self.table_width_hint.emit(total+50)
+        self.table_width_hint.emit(total+80)

@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 )
 
 from settings import Settings
+import autostart
 
 
 class AlwaysDownComboBox(QComboBox):
@@ -105,8 +106,11 @@ class SettingsDialog(QDialog):
         general_form.setContentsMargins(10, 16, 10, 8)
 
         self.check_autostart = QCheckBox("开机自动启动")
-        self.check_autostart.setEnabled(False)
-        self.check_autostart.setToolTip("待实现")
+        if autostart.is_available():
+            self.check_autostart.setChecked(autostart.is_enabled())
+        else:
+            self.check_autostart.setEnabled(False)
+            self.check_autostart.setToolTip("打包为 exe 后可用")
         general_form.addRow(self.check_autostart)
 
         self.spin_sync_interval = QSpinBox()
@@ -163,4 +167,11 @@ class SettingsDialog(QDialog):
             Settings().set("closeToTray", None)
         else:
             Settings().set("closeToTray", close_value)
+
+        if autostart.is_available():
+            if self.check_autostart.isChecked():
+                autostart.enable()
+            else:
+                autostart.disable()
+
         self.accept()
