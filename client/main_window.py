@@ -66,13 +66,9 @@ class Mywindow(QMainWindow):
         self.user_show.setStyleSheet("padding: 4px 8px; color: #64748b; font-size: 12px;")
         toolbar.addWidget(self.user_show)
 
-        self.login_button = QPushButton("登录")
-        toolbar.addWidget(self.login_button)
-
-        self.logout_button = QPushButton("退出")
-        self.logout_button.setProperty("secondary", True)
-        self.logout_button.setVisible(False)
-        toolbar.addWidget(self.logout_button)
+        self.login_action = toolbar.addAction("登录")
+        self.logout_action = toolbar.addAction("退出")
+        self.logout_action.setVisible(False)
 
         self.settings_button = QPushButton()
         self.settings_button.setToolTip("设置")
@@ -83,8 +79,8 @@ class Mywindow(QMainWindow):
         gear_path = os.path.join(base, "icons", "gear.svg")
         self.settings_button.setIcon(QIcon(gear_path))
         self.settings_button.setProperty("secondary", True)
-        self.settings_button.setFixedSize(40, 40)
-        self.settings_button.setIconSize(QSize(18, 18))
+        self.settings_button.setFixedSize(44, 44)
+        self.settings_button.setIconSize(QSize(22, 22))
         toolbar.addWidget(self.settings_button)
 
         self.addToolBar(toolbar)
@@ -126,8 +122,8 @@ class Mywindow(QMainWindow):
         self.pushButton_procs.clicked.connect(self.open_add_app_dialog)
         self.btn_crosshair.pressed.connect(self._on_crosshair_pressed)
         self.settings_button.clicked.connect(self.open_settings_dialog)
-        self.login_button.clicked.connect(self.open_login_dialog)
-        self.logout_button.clicked.connect(self._logout)
+        self.login_action.triggered.connect(self.open_login_dialog)
+        self.logout_action.triggered.connect(self._logout)
 
         # ---- 启动 ----
         self.statusBar().showMessage("系统就绪，正在初始化...", 3000)
@@ -287,24 +283,33 @@ class Mywindow(QMainWindow):
             self.statusBar().showMessage("该应用已在监控列表中", 3000)
 
     def open_login_dialog(self):
+        print("[MainWindow] 打开登录对话框...")
         dialog = LoginDialog(self)
-        if dialog.exec() == QDialog.Accepted:
+        result = dialog.exec()
+        print(f"[MainWindow] 对话框返回值: {result}, QDialog.Accepted={QDialog.Accepted}")
+        if result == QDialog.Accepted:
+            print(f"[MainWindow] 登录成功, token={dialog.token[:10] if dialog.token else 'None'}..., username={dialog.username}")
             self.token = dialog.token
             self.username = dialog.username
             self.user_show.setText(self.username)
             self.user_show.setStyleSheet("padding: 4px 8px; color: #334155; font-size: 12px; font-weight: 500;")
-            self.login_button.setVisible(False)
-            self.logout_button.setVisible(True)
+            self.login_action.setVisible(False)
+            self.logout_action.setVisible(True)
+            print("[MainWindow] UI 已更新: 显示用户名, 隐藏登录按钮, 显示退出按钮")
             self.run_immediate_sync()
+        else:
+            print(f"[MainWindow] 登录对话框未返回 Accepted, 返回值: {result}")
 
     def _logout(self):
+        print("[MainWindow] 用户点击退出登录")
         self.token = None
         self.username = None
         self.user_show.setText("未登录")
         self.user_show.setStyleSheet("padding: 4px 8px; color: #64748b; font-size: 12px;")
-        self.login_button.setVisible(True)
-        self.logout_button.setVisible(False)
+        self.login_action.setVisible(True)
+        self.logout_action.setVisible(False)
         self.statusBar().showMessage("已退出登录", 3000)
+        print("[MainWindow] 退出登录完成, UI 已恢复")
 
     def open_settings_dialog(self):
         SettingsDialog(self).exec()

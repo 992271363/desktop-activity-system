@@ -102,6 +102,7 @@ class LoginDialog(QDialog):
         self.worker_thread.finished.connect(self.worker.deleteLater)
         self.worker_thread.finished.connect(self.worker_thread.deleteLater)
 
+        print(f"LoginDialog: 启动登录线程, username={username_text}")
         self.worker_thread.start()
 
     def handle_login_result(self, status, token):
@@ -111,7 +112,9 @@ class LoginDialog(QDialog):
         if status == LoginStatus.SUCCESS:
             self.token = token
             self.username = self.user_input.text()
+            print(f"LoginDialog: 即将调用 accept(), token={token[:10] if token else 'None'}..., username={self.username}")
             self.accept()
+            print("LoginDialog: accept() 已调用")
         elif status == LoginStatus.INVALID_CREDENTIALS:
             self.tips_label.setText("用户名或密码不正确。")
         elif status == LoginStatus.NETWORK_ERROR:

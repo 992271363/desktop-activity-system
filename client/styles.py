@@ -273,6 +273,25 @@ QToolBar::separator {
     margin: 4px 6px;
 }
 
+/* 工具栏文字按钮（登录/退出等 QAction） */
+QToolBar QToolButton {
+    background-color: #3b82f6;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 16px;
+    min-height: 28px;
+    font-weight: 500;
+}
+
+QToolBar QToolButton:hover {
+    background-color: #2563eb;
+}
+
+QToolBar QToolButton:pressed {
+    background-color: #1d4ed8;
+}
+
 /* ---- 消息框 ---- */
 QMessageBox {
     background-color: #ffffff;
