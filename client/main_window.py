@@ -180,7 +180,20 @@ class Mywindow(QMainWindow):
         self._crosshair_active = True
         self.grabMouse()
         QApplication.setOverrideCursor(Qt.CrossCursor)
-        self.statusBar().showMessage("拖动到目标窗口上松开即可添加…")
+        self.setFocus()
+        self.statusBar().showMessage("拖动到目标窗口松开添加 | 右键或 Esc 取消")
+
+    def _cancel_crosshair(self):
+        self._crosshair_active = False
+        self.releaseMouse()
+        QApplication.restoreOverrideCursor()
+        self.statusBar().showMessage("已取消拾取", 2000)
+
+    def mousePressEvent(self, event):
+        if self._crosshair_active and event.button() == Qt.RightButton:
+            self._cancel_crosshair()
+            return
+        super().mousePressEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         if self._crosshair_active:
@@ -191,6 +204,12 @@ class Mywindow(QMainWindow):
             self._pick_window_at(event.globalPosition().toPoint())
             return
         super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event):
+        if self._crosshair_active and event.key() == Qt.Key_Escape:
+            self._cancel_crosshair()
+            return
+        super().keyPressEvent(event)
 
     def _pick_window_at(self, screen_pos):
         hwnd = win32gui.WindowFromPoint((screen_pos.x(), screen_pos.y()))
