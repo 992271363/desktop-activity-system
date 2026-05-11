@@ -1,14 +1,17 @@
 import time
+import os
+import sys
 import psutil
 import win32gui
 import win32con
 import win32process
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QAction, QIcon, QMouseEvent
+from PySide6.QtCore import Qt, QTimer, QSize
+from PySide6.QtGui import QAction, QIcon, QMouseEvent, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QDialog, QPushButton, QLabel,
-    QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QSystemTrayIcon, QMenu, QStyle
+    QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QSystemTrayIcon,
+    QMenu, QStyle, QToolBar, QSizePolicy
 )
 
 from app_repository import AppRepository
@@ -36,33 +39,65 @@ class Mywindow(QMainWindow):
         central = QWidget(self)
         self.setCentralWidget(central)
         main_layout = QVBoxLayout(central)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(10)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        self.tableWidget = QTableWidget()
-        main_layout.addWidget(self.tableWidget, stretch=1)
-
-        bottom_layout = QHBoxLayout()
-        bottom_layout.setSpacing(10)
+        # ---- 工具栏 ----
+        toolbar = QToolBar()
+        toolbar.setMovable(False)
+        toolbar.setFloatable(False)
+        toolbar.setIconSize(QSize(18, 18))
+        toolbar.setStyleSheet("QToolBar { border: none; padding: 6px 8px; spacing: 6px; background: transparent; }")
 
         self.pushButton_procs = QPushButton("添加进程")
         self.btn_crosshair = QPushButton("拾取窗口")
         self.btn_crosshair.setToolTip("按住后拖动到目标窗口上松开，自动添加监控")
         self.btn_crosshair.setProperty("crosshair", True)
-        self.settings_button = QPushButton("设置")
+
+        toolbar.addWidget(self.pushButton_procs)
+        toolbar.addWidget(self.btn_crosshair)
+        toolbar.addSeparator()
+
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        toolbar.addWidget(spacer)
+
+        self.user_show = QLabel("未登录")
+        self.user_show.setStyleSheet("padding: 4px 8px; color: #64748b; font-size: 12px;")
+        toolbar.addWidget(self.user_show)
+
         self.login_button = QPushButton("登录")
-        self.user_label = QLabel("账号：")
-        self.user_show = QLabel("N/A")
+        toolbar.addWidget(self.login_button)
 
-        bottom_layout.addWidget(self.pushButton_procs)
-        bottom_layout.addWidget(self.btn_crosshair)
-        bottom_layout.addWidget(self.settings_button)
-        bottom_layout.addWidget(self.login_button)
-        bottom_layout.addWidget(self.user_label)
-        bottom_layout.addWidget(self.user_show)
-        bottom_layout.addStretch()
+        self.logout_button = QPushButton("退出")
+        self.logout_button.setProperty("secondary", True)
+        self.logout_button.setVisible(False)
+        toolbar.addWidget(self.logout_button)
 
-        main_layout.addLayout(bottom_layout)
+        self.settings_button = QPushButton()
+        self.settings_button.setToolTip("设置")
+        if getattr(sys, 'frozen', False):
+            base = sys._MEIPASS
+        else:
+            base = os.path.dirname(os.path.abspath(__file__))
+        gear_path = os.path.join(base, "icons", "gear.svg")
+        self.settings_button.setIcon(QIcon(gear_path))
+        self.settings_button.setProperty("secondary", True)
+        self.settings_button.setFixedSize(40, 40)
+        self.settings_button.setIconSize(QSize(18, 18))
+        toolbar.addWidget(self.settings_button)
+
+        self.addToolBar(toolbar)
+
+        # ---- 表格 ----
+        self._table_container = QWidget()
+        table_layout = QVBoxLayout(self._table_container)
+        table_layout.setContentsMargins(10, 10, 10, 10)
+        table_layout.setSpacing(0)
+
+        self.tableWidget = QTableWidget()
+        table_layout.addWidget(self.tableWidget, stretch=1)
+        main_layout.addWidget(self._table_container, stretch=1)
 
         # ---- 状态 ----
         self.token = None
@@ -88,13 +123,13 @@ class Mywindow(QMainWindow):
         self._setup_tray_icon()
 
         # ---- 信号连接 ----
-        self.login_button.clicked.connect(self.open_login_dialog)
         self.pushButton_procs.clicked.connect(self.open_add_app_dialog)
         self.btn_crosshair.pressed.connect(self._on_crosshair_pressed)
         self.settings_button.clicked.connect(self.open_settings_dialog)
+        self.login_button.clicked.connect(self.open_login_dialog)
+        self.logout_button.clicked.connect(self._logout)
 
         # ---- 启动 ----
-        self.user_show.setText("未登录")
         self.statusBar().showMessage("系统就绪，正在初始化...", 3000)
 
         self._refresh_table()
@@ -137,8 +172,8 @@ class Mywindow(QMainWindow):
         self.table_manager.refresh(apps)
 
     def _adjust_window_width(self, table_content_width: int):
-        margins = self.centralWidget().layout().contentsMargins()
-        extra = margins.left() + margins.right() + self.centralWidget().layout().spacing()
+        margins = self._table_container.layout().contentsMargins()
+        extra = margins.left() + margins.right()
         self.resize(table_content_width + extra, self.height())
 
     def _refresh_monitor_list(self):
@@ -257,7 +292,19 @@ class Mywindow(QMainWindow):
             self.token = dialog.token
             self.username = dialog.username
             self.user_show.setText(self.username)
+            self.user_show.setStyleSheet("padding: 4px 8px; color: #334155; font-size: 12px; font-weight: 500;")
+            self.login_button.setVisible(False)
+            self.logout_button.setVisible(True)
             self.run_immediate_sync()
+
+    def _logout(self):
+        self.token = None
+        self.username = None
+        self.user_show.setText("未登录")
+        self.user_show.setStyleSheet("padding: 4px 8px; color: #64748b; font-size: 12px;")
+        self.login_button.setVisible(True)
+        self.logout_button.setVisible(False)
+        self.statusBar().showMessage("已退出登录", 3000)
 
     def open_settings_dialog(self):
         SettingsDialog(self).exec()

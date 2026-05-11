@@ -5,6 +5,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from . import models, schemas, auth, database
 from .routers import dashboard
+from .logger import logger
 
 
 def ensure_aware_dt(dt: datetime) -> datetime:
@@ -20,6 +21,7 @@ models.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI()
 app.include_router(dashboard.router)
+logger.info("后端 API 已启动。")
 
 #智能同步接口(采用手动事务控制)
 @app.post("/sync/sessions/", status_code=status.HTTP_201_CREATED, tags=["Sync"])
@@ -105,13 +107,13 @@ def sync_sessions_from_client(
         
         #所有循环成功结束后，在 try 块的最后，手动提交整个事务
         db.commit()
-
+        logger.info(f"用户 {current_user.username} 成功同步了 {len(sessions_data)} 个会话。")
         return {"message": f"成功同步了 {len(sessions_data)} 个会话。"}
 
     except Exception as e:
         #如果 try块中的任何地方（包括flush）发生异常手动回滚所有更改
         db.rollback()
-        print(f"同步过程中发生严重错误，事务已回滚: {e}")
+        logger.error(f"同步过程中发生严重错误，事务已回滚: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"同步失败，服务器内部错误: {str(e)}"
@@ -124,12 +126,14 @@ def sync_sessions_from_client(
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
     user = auth.authenticate_user(db, form_data.username, form_data.password)
     if not user:
+        logger.warning(f"登录失败: 用户名或密码不正确 (username={form_data.username})")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户名或密码不正确",
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token = auth.create_access_token(data={"sub": user.username})
+    logger.info(f"用户 {user.username} 登录成功。")
     return {"access_token": access_token, "token_type": "bearer"}
 
 # 用户注册API
@@ -137,7 +141,9 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
 def register_user(user_create: schemas.UserCreate, db: Session = Depends(database.get_db)):
     db_user = db.query(models.User).filter(models.User.username == user_create.username).first()
     if db_user:
+        logger.warning(f"注册失败: 用户名已存在 (username={user_create.username})")
         raise HTTPException(status_code=400, detail="用户名已存在")
     
     new_user = auth.create_user(db=db, user=user_create)
+    logger.info(f"新用户注册成功: {new_user.username}")
     return new_user

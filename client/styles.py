@@ -54,10 +54,12 @@ QPushButton:disabled {
 
 /* 次要按钮（取消、关闭等） */
 QPushButton[secondary="true"],
-QDialogButtonBox QPushButton {
+DialogButtonBox QPushButton {
     background-color: #f1f5f9;
     color: #000000;
     border: 1px solid #cbd5e1;
+    padding: 6px 16px;
+    min-height: 28px;
 }
 
 QPushButton[secondary="true"]:hover,
@@ -255,6 +257,20 @@ QProgressBar {
 QProgressBar::chunk {
     background-color: #3b82f6;
     border-radius: 3px;
+}
+
+/* ---- 工具栏 ---- */
+QToolBar {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 4px 8px;
+    spacing: 6px;
+}
+
+QToolBar::separator {
+    width: 1px;
+    background-color: #e2e8f0;
+    margin: 4px 6px;
 }
 
 /* ---- 消息框 ---- */
