@@ -1,4 +1,7 @@
 import os
+import time
+import tempfile
+import traceback
 import ctypes
 import ctypes.wintypes
 
@@ -7,9 +10,31 @@ import win32con
 import win32api
 import win32process
 
-from PySide6.QtCore import Qt, Signal, QTimer, QRect, QObject
+from PySide6.QtCore import Qt, Signal, QTimer, QObject
 from PySide6.QtGui import QPainter, QPen, QColor, QCursor
 from PySide6.QtWidgets import QWidget, QApplication, QPushButton
+
+
+_DEBUG_ENABLED = False
+_DEBUG_LOG = os.path.join(tempfile.gettempdir(), "pick_overlay_debug.log")
+
+
+def debug_log(msg):
+    if not _DEBUG_ENABLED:
+        return
+
+    try:
+        with open(_DEBUG_LOG, "a", encoding="utf-8") as f:
+            f.write(f"{time.strftime('%H:%M:%S')} {msg}\n")
+            f.flush()
+    except Exception:
+        pass
+
+
+debug_log("")
+debug_log("=" * 80)
+debug_log(f"module loaded, pid={os.getpid()}")
+debug_log(f"log file={_DEBUG_LOG}")
 
 
 def enable_dpi_awareness():
@@ -23,20 +48,23 @@ def enable_dpi_awareness():
         ctypes.windll.user32.SetProcessDpiAwarenessContext(
             DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
         )
+        debug_log("DPI awareness: PER_MONITOR_AWARE_V2")
         return
     except Exception:
-        pass
+        debug_log("DPI awareness: SetProcessDpiAwarenessContext failed")
 
     try:
         ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        debug_log("DPI awareness: SetProcessDpiAwareness(2)")
         return
     except Exception:
-        pass
+        debug_log("DPI awareness: SetProcessDpiAwareness failed")
 
     try:
         ctypes.windll.user32.SetProcessDPIAware()
+        debug_log("DPI awareness: SetProcessDPIAware")
     except Exception:
-        pass
+        debug_log("DPI awareness: SetProcessDPIAware failed")
 
 
 enable_dpi_awareness()
@@ -90,6 +118,7 @@ class PickOverlayPane(QWidget):
 
         self.manager = manager
         self.screen = screen
+        self._paint_count = 0
 
         self.setWindowFlags(
             Qt.FramelessWindowHint
@@ -102,10 +131,22 @@ class PickOverlayPane(QWidget):
 
         self._apply_screen_geometry()
 
+        try:
+            geo = self.screen.geometry()
+            debug_log(
+                f"PickOverlayPane created: screen={self.screen.name()}, "
+                f"geo=({geo.x()},{geo.y()},{geo.width()},{geo.height()}), "
+                f"dpr={self.screen.devicePixelRatio()}"
+            )
+        except Exception:
+            debug_log("PickOverlayPane created, screen info failed")
+
     def _apply_screen_geometry(self):
         self.setGeometry(self.screen.geometry())
 
     def showEvent(self, event):
+        debug_log(f"pane showEvent: screen={self.screen.name()}")
+
         super().showEvent(event)
 
         self._apply_screen_geometry()
@@ -114,8 +155,13 @@ class PickOverlayPane(QWidget):
         self.activateWindow()
         self.repaint()
 
+    def closeEvent(self, event):
+        debug_log(f"pane closeEvent: screen={self.screen.name()}")
+        super().closeEvent(event)
+
     def mousePressEvent(self, event):
         if event.button() == Qt.RightButton:
+            debug_log("pane mousePressEvent: right button")
             self.manager.request_cancel_by_right_button()
             event.accept()
             return
@@ -124,6 +170,7 @@ class PickOverlayPane(QWidget):
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.RightButton:
+            debug_log("pane mouseReleaseEvent: right button")
             self.manager.request_cancel_by_right_button()
             event.accept()
             return
@@ -131,11 +178,13 @@ class PickOverlayPane(QWidget):
         event.accept()
 
     def contextMenuEvent(self, event):
+        debug_log("pane contextMenuEvent")
         self.manager.request_cancel_by_right_button()
         event.accept()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
+            debug_log("pane keyPressEvent: Escape")
             self.manager.cancel()
             return
 
@@ -207,47 +256,63 @@ class PickOverlayPane(QWidget):
         return left, top, right, bottom
 
     def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
+        self._paint_count += 1
 
-        painter.fillRect(self.rect(), self._BG_COLOR)
+        if self._paint_count % 30 == 0:
+            debug_log(
+                f"paint {self._paint_count}, "
+                f"screen={self.screen.name()}, "
+                f"target={self.manager.target_hwnd}, "
+                f"mouse={self.manager.mouse_pos_physical}"
+            )
 
-        mouse_x, mouse_y = self.manager.mouse_pos_physical
-        monitor_rect = self._monitor_rect_physical()
-        monitor_left, monitor_top, monitor_right, monitor_bottom = monitor_rect
+        try:
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.Antialiasing)
 
-        local_mouse_x, local_mouse_y = self._physical_point_to_local(
-            mouse_x,
-            mouse_y,
-        )
+            painter.fillRect(self.rect(), self._BG_COLOR)
 
-        painter.setPen(QPen(self._CROSS_COLOR, 1))
+            mouse_x, mouse_y = self.manager.mouse_pos_physical
+            monitor_rect = self._monitor_rect_physical()
+            monitor_left, monitor_top, monitor_right, monitor_bottom = monitor_rect
 
-        if monitor_left <= mouse_x < monitor_right:
-            painter.drawLine(local_mouse_x, 0, local_mouse_x, self.height())
+            local_mouse_x, local_mouse_y = self._physical_point_to_local(
+                mouse_x,
+                mouse_y,
+            )
 
-        if monitor_top <= mouse_y < monitor_bottom:
-            painter.drawLine(0, local_mouse_y, self.width(), local_mouse_y)
+            painter.setPen(QPen(self._CROSS_COLOR, 1))
 
-        target_hwnd = self.manager.target_hwnd
+            if monitor_left <= mouse_x < monitor_right:
+                painter.drawLine(local_mouse_x, 0, local_mouse_x, self.height())
 
-        if target_hwnd:
-            try:
-                target_rect = self.manager.get_window_frame_rect_physical(
-                    target_hwnd
-                )
-                visible_part = self._intersect_rect(target_rect, monitor_rect)
+            if monitor_top <= mouse_y < monitor_bottom:
+                painter.drawLine(0, local_mouse_y, self.width(), local_mouse_y)
 
-                if visible_part:
-                    x, y, w, h = self._physical_rect_to_local(visible_part)
-                    painter.fillRect(x, y, w, h, self._HIGHLIGHT_FILL)
-                    painter.setPen(QPen(self._HIGHLIGHT_COLOR, 3))
-                    painter.drawRect(x, y, w, h)
+            target_hwnd = self.manager.target_hwnd
 
-            except Exception:
-                pass
+            if target_hwnd:
+                try:
+                    target_rect = self.manager.get_window_frame_rect_physical(
+                        target_hwnd
+                    )
+                    visible_part = self._intersect_rect(target_rect, monitor_rect)
 
-        painter.end()
+                    if visible_part:
+                        x, y, w, h = self._physical_rect_to_local(visible_part)
+                        painter.fillRect(x, y, w, h, self._HIGHLIGHT_FILL)
+                        painter.setPen(QPen(self._HIGHLIGHT_COLOR, 3))
+                        painter.drawRect(x, y, w, h)
+
+                except Exception:
+                    debug_log("EXCEPTION drawing target rect:")
+                    debug_log(traceback.format_exc())
+
+            painter.end()
+
+        except Exception:
+            debug_log("EXCEPTION in paintEvent:")
+            debug_log(traceback.format_exc())
 
 
 class PickOverlay(QObject):
@@ -260,6 +325,8 @@ class PickOverlay(QObject):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+
+        debug_log("PickOverlay __init__")
 
         self._own_pid = os.getpid()
 
@@ -277,37 +344,65 @@ class PickOverlay(QObject):
         self._pick_press_seen = False
 
         self._panes = []
+        self._tick_count = 0
+        self._last_target_log = None
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._timer.start(16)
 
+        debug_log(
+            f"PickOverlay timer started, "
+            f"mouse={self.mouse_pos_physical}, "
+            f"started_left_down={self._started_with_left_down}"
+        )
+
+    def __del__(self):
+        debug_log("PickOverlay __del__")
+
     def show(self):
+        debug_log("PickOverlay show begin")
+
         self._create_panes()
+        debug_log(f"panes created: {len(self._panes)}")
+
         self._tick()
+        debug_log("first tick done")
 
         for pane in self._panes:
             pane.show()
             pane.raise_()
             pane.repaint()
 
+        debug_log("PickOverlay show end")
+
     def close(self):
+        debug_log("PickOverlay close called")
         self._close_panes()
 
     def _create_panes(self):
+        debug_log("_create_panes begin")
         self._close_panes()
 
-        for screen in QApplication.screens():
+        screens = QApplication.screens()
+        debug_log(f"QApplication screens: {len(screens)}")
+
+        for screen in screens:
             pane = PickOverlayPane(self, screen)
             self._panes.append(pane)
 
+        debug_log(f"_create_panes end: {len(self._panes)}")
+
     def _close_panes(self):
+        debug_log(f"_close_panes: {len(self._panes)}")
+
         for pane in self._panes:
             try:
                 pane.close()
                 pane.deleteLater()
             except Exception:
-                pass
+                debug_log("EXCEPTION in _close_panes:")
+                debug_log(traceback.format_exc())
 
         self._panes = []
 
@@ -321,38 +416,68 @@ class PickOverlay(QObject):
         return bool(win32api.GetAsyncKeyState(self._VK_ESCAPE) & 0x8000)
 
     def _tick(self):
-        if self._closed:
-            return
+        try:
+            self._tick_count += 1
 
-        if self._is_escape_down():
-            self.cancel()
-            return
+            if self._tick_count % 30 == 0:
+                debug_log(
+                    f"tick {self._tick_count}, "
+                    f"closed={self._closed}, "
+                    f"target={self.target_hwnd}, "
+                    f"mouse={self.mouse_pos_physical}, "
+                    f"panes={len(self._panes)}"
+                )
 
-        self._refresh_target()
-        self._poll_mouse_state()
+            if self._closed:
+                debug_log("tick ignored because closed")
+                return
 
-        for pane in self._panes:
-            pane.update()
+            if self._is_escape_down():
+                debug_log("escape down, cancel")
+                self.cancel()
+                return
+
+            self._refresh_target()
+            self._poll_mouse_state()
+
+            for pane in self._panes:
+                pane.update()
+
+        except Exception:
+            debug_log("EXCEPTION in _tick:")
+            debug_log(traceback.format_exc())
 
     def _refresh_target(self):
-        self.mouse_pos_physical = win32api.GetCursorPos()
-        x, y = self.mouse_pos_physical
+        try:
+            self.mouse_pos_physical = win32api.GetCursorPos()
+            x, y = self.mouse_pos_physical
 
-        hwnd = self._find_window_under_physical_point(x, y)
+            hwnd = self._find_window_under_physical_point(x, y)
 
-        if hwnd != self.target_hwnd:
-            self.target_hwnd = hwnd
+            if hwnd != self.target_hwnd:
+                debug_log(f"target changed: {self.target_hwnd} -> {hwnd}")
+                self.target_hwnd = hwnd
+
+        except Exception:
+            debug_log("EXCEPTION in _refresh_target:")
+            debug_log(traceback.format_exc())
 
     def _find_window_under_physical_point(self, x, y):
         """
         使用物理像素坐标做命中检测。
-        这部分不依赖 Qt 的逻辑坐标，因此不会被混合 DPI 缩放影响。
+        注意：不要在 EnumWindows 回调里 return False。
+        pywin32 / 打包后的 exe 里，提前停止 EnumWindows 可能会被包装成异常。
         """
         own_pid = self._own_pid
         pane_hwnds = {int(pane.winId()) for pane in self._panes}
         found = []
 
         def enum_proc(hwnd, _):
+            # 已经找到第一个命中的窗口了，继续返回 True。
+            # 这样可以避免 return False 导致 EnumWindows 抛 pywintypes.error。
+            if found:
+                return True
+
             if hwnd in pane_hwnds:
                 return True
 
@@ -367,7 +492,7 @@ class PickOverlay(QObject):
                 if pid == own_pid:
                     return True
             except Exception:
-                pass
+                return True
 
             try:
                 rect = self.get_window_frame_rect_physical(hwnd)
@@ -381,18 +506,32 @@ class PickOverlay(QObject):
 
             if left <= x < right and top <= y < bottom:
                 found.append(hwnd)
-                return False
+                return True
 
             return True
 
-        win32gui.EnumWindows(enum_proc, None)
+        try:
+            win32gui.EnumWindows(enum_proc, None)
+        except Exception:
+            # 理论上改完后这里不该再频繁出现。
+            # 如果已经找到 hwnd，就不要因为 EnumWindows 后续异常把 target 清空。
+            if found:
+                debug_log("EnumWindows raised, but hwnd was already found; ignored")
+            else:
+                debug_log("EXCEPTION in EnumWindows:")
+                debug_log(traceback.format_exc())
+                return None
 
         if not found:
             return None
 
         hwnd = found[0]
 
-        root = win32gui.GetAncestor(hwnd, win32con.GA_ROOT)
+        try:
+            root = win32gui.GetAncestor(hwnd, win32con.GA_ROOT)
+        except Exception:
+            return hwnd
+
         if root and root not in pane_hwnds:
             try:
                 _, root_pid = win32process.GetWindowThreadProcessId(root)
@@ -449,6 +588,8 @@ class PickOverlay(QObject):
         if self._closed:
             return
 
+        debug_log("request_cancel_by_right_button")
+
         self._right_cancel_pending = True
         self.target_hwnd = None
 
@@ -456,61 +597,84 @@ class PickOverlay(QObject):
             pane.update()
 
     def _poll_mouse_state(self):
-        right_down = self._is_right_down()
+        try:
+            right_down = self._is_right_down()
 
-        if right_down:
-            self.request_cancel_by_right_button()
-            return
-
-        if self._right_cancel_pending:
-            self.cancel()
-            return
-
-        left_down = self._is_left_down()
-
-        if self._started_with_left_down:
-            moved = (
-                QCursor.pos() - self._start_pos_qt
-            ).manhattanLength() >= QApplication.startDragDistance()
-
-            if left_down:
-                if moved:
-                    self._drag_mode = True
+            if right_down:
+                self.request_cancel_by_right_button()
                 return
 
-            if self._drag_mode:
+            if self._right_cancel_pending:
+                debug_log("right cancel pending -> cancel")
+                self.cancel()
+                return
+
+            left_down = self._is_left_down()
+
+            if self._started_with_left_down:
+                moved = (
+                    QCursor.pos() - self._start_pos_qt
+                ).manhattanLength() >= QApplication.startDragDistance()
+
+                if left_down:
+                    if moved:
+                        if not self._drag_mode:
+                            debug_log("drag mode entered")
+                        self._drag_mode = True
+                    return
+
+                if self._drag_mode:
+                    debug_log("left released after drag -> finish pick")
+                    self._finish_pick()
+                    return
+
+                debug_log("started left down released without drag")
+                self._started_with_left_down = False
+                self._waiting_for_pick_press = True
+                self._pick_press_seen = False
+                return
+
+            if self._waiting_for_pick_press:
+                if left_down:
+                    debug_log("pick press seen")
+                    self._pick_press_seen = True
+                    self._waiting_for_pick_press = False
+                return
+
+            if self._pick_press_seen and not left_down:
+                debug_log("pick press released -> finish pick")
                 self._finish_pick()
-                return
 
-            self._started_with_left_down = False
-            self._waiting_for_pick_press = True
-            self._pick_press_seen = False
-            return
-
-        if self._waiting_for_pick_press:
-            if left_down:
-                self._pick_press_seen = True
-                self._waiting_for_pick_press = False
-            return
-
-        if self._pick_press_seen and not left_down:
-            self._finish_pick()
+        except Exception:
+            debug_log("EXCEPTION in _poll_mouse_state:")
+            debug_log(traceback.format_exc())
 
     def _finish_pick(self):
+        debug_log("finish_pick called")
+
         if self._closed:
+            debug_log("finish_pick ignored because closed")
             return
 
         self._closed = True
         self._timer.stop()
 
         hwnd = self.target_hwnd
+        debug_log(f"finish_pick hwnd={hwnd}")
+
         self._close_panes()
 
         if hwnd:
             self.window_picked.emit(int(hwnd))
+            debug_log("window_picked emitted")
+        else:
+            debug_log("finish_pick without hwnd")
 
     def cancel(self):
+        debug_log("cancel called")
+
         if self._closed:
+            debug_log("cancel ignored because closed")
             return
 
         self._closed = True
@@ -518,3 +682,5 @@ class PickOverlay(QObject):
 
         self._close_panes()
         self.cancelled.emit()
+
+        debug_log("cancelled emitted")

@@ -10,7 +10,7 @@ from PySide6.QtGui import QAction, QIcon, QImage, QColor, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QDialog, QPushButton, QLabel,
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QSystemTrayIcon,
-    QMenu, QStyle, QToolBar, QSizePolicy
+    QMenu, QStyle, QToolBar, QSizePolicy, QLineEdit
 )
 
 from app_repository import AppRepository
@@ -22,6 +22,7 @@ from settings_dialog import CloseAskDialog, SettingsDialog
 from size_grip import StyledSizeGrip
 from pick_overlay import PickOverlay, PickButton
 from theme import get_system_theme
+from search_utils import make_search_keywords, matches_search_keywords
 
 from dialogs import AppDetailDialog, ClosingDialog, AddAppDialog
 from login_dialog import LoginDialog
@@ -101,9 +102,14 @@ class Mywindow(QMainWindow):
         toolbar.addWidget(self.btn_crosshair)
         toolbar.addSeparator()
 
-        spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        toolbar.addWidget(spacer)
+        self.search_edit = QLineEdit()
+        self.search_edit.setPlaceholderText("搜索名称...")
+        self.search_edit.setClearButtonEnabled(True)
+        self.search_edit.setMinimumWidth(220)
+        self.search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.search_edit.setToolTip("按应用名称或路径搜索，支持多个关键词")
+        self.search_edit.setProperty("search", True)
+        toolbar.addWidget(self.search_edit)
 
         self.user_show = QLabel("未登录")
         self.user_show.setStyleSheet("padding: 4px 8px; color: #64748b; font-size: 12px;")
@@ -165,6 +171,7 @@ class Mywindow(QMainWindow):
         # ---- 信号连接 ----
         self.pushButton_procs.clicked.connect(self.open_add_app_dialog)
         self.btn_crosshair.pick_requested.connect(self.start_pick_window)
+        self.search_edit.textChanged.connect(self._apply_table_search)
         self.settings_button.clicked.connect(self.open_settings_dialog)
         self.login_action.triggered.connect(self.open_login_dialog)
         self.logout_action.triggered.connect(self._logout)
@@ -213,6 +220,31 @@ class Mywindow(QMainWindow):
     def _refresh_table(self):
         apps = AppRepository.get_all_apps()
         self.table_manager.refresh(apps)
+        self._apply_table_search()
+
+    def _apply_table_search(self):
+        if not hasattr(self, "search_edit"):
+            return
+        keywords = make_search_keywords(self.search_edit.text())
+        total = self.tableWidget.rowCount()
+        matched = 0
+        for row in range(total):
+            if not keywords:
+                self.tableWidget.setRowHidden(row, False)
+                matched += 1
+                continue
+            values = []
+            for col in range(self.tableWidget.columnCount()):
+                item = self.tableWidget.item(row, col)
+                values.append(item.text() if item is not None else "")
+            visible = matches_search_keywords(values, keywords)
+            self.tableWidget.setRowHidden(row, not visible)
+            if visible:
+                matched += 1
+        if keywords:
+            self.statusBar().showMessage(f"找到 {matched} 个匹配项", 2000)
+        else:
+            self.statusBar().clearMessage()
 
     def _adjust_window_width(self, table_content_width: int):
         margins = self._table_container.layout().contentsMargins()
@@ -262,6 +294,7 @@ class Mywindow(QMainWindow):
         self._pick_overlay.cancelled.connect(self.on_pick_cancelled)
         self._pick_overlay.show()
         QApplication.processEvents()
+        self.statusBar().showMessage("请拖拽至目标窗口 | 右键或esc取消选取状态")
 
     def _remove_pick_right_click_blocker(self):
         try:
@@ -278,7 +311,7 @@ class Mywindow(QMainWindow):
 
     def on_pick_cancelled(self):
         self._remove_pick_right_click_blocker()
-        self.statusBar().showMessage("已取消拾取", 2000)
+        QTimer.singleShot(0, lambda: self.statusBar().showMessage("已取消拾取", 2000))
 
     def _on_window_picked(self, hwnd):
         self._remove_pick_right_click_blocker()

@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 )  # 批量导入所需控件和布局类
 
 from services import get_process_list  # 进程列表数据源
+from search_utils import make_search_keywords, matches_search_keywords
 
 
 class ProcSelectDialog(QDialog):
@@ -84,27 +85,23 @@ class ProcSelectDialog(QDialog):
 
     def populate_process_list(self):
         """根据搜索词过滤并重新填充进程表格"""
-        search_term = self.lineEdit_search.text().lower().strip()  # 获取搜索词
+        keywords = make_search_keywords(self.lineEdit_search.text())
 
         self.procTable.setSortingEnabled(False)  # 数据更新时先关闭排序，避免索引错乱
         self.procTable.setRowCount(0)  # 清空表格
 
         processes = get_process_list()  # 获取所有进程
 
-        # 无搜索词则显示全部，否则按 PID/名称/路径过滤
-        if not search_term:
+        # 无搜索词则显示全部，否则按关键词匹配 PID/名称/路径
+        if not keywords:
             filtered_processes = processes
         else:
-            filtered_processes = []
-            for proc in processes:
-                pid_str = str(proc['pid'])
-                name_str = proc['name'].lower()
-                path_str = proc['exe'].lower() if proc['exe'] else ""
-
-                if (search_term in pid_str or
-                        search_term in name_str or
-                        search_term in path_str):
-                    filtered_processes.append(proc)
+            filtered_processes = [
+                proc for proc in processes
+                if matches_search_keywords(
+                    [proc['pid'], proc['name'], proc['exe'] or ""], keywords
+                )
+            ]
 
         # 填充表格并附加 tooltip，方便完整查看截断内容
         self.procTable.setRowCount(len(filtered_processes))

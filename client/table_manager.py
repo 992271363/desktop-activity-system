@@ -15,6 +15,7 @@ _collator = QCollator()
 _collator.setCaseSensitivity(Qt.CaseInsensitive)
 
 _NOT_RUNNING = -1
+_BASE_TOTAL_ROLE = Qt.UserRole + 100
 
 
 class StyledHeaderView(QHeaderView):
@@ -195,10 +196,12 @@ class AppTableManager(QObject):
 
             item_focus = SortableTableWidgetItem(format_seconds_to_text(app.total_focus_seconds))
             item_focus.setData(Qt.UserRole, app.total_focus_seconds)
+            item_focus.setData(_BASE_TOTAL_ROLE, app.total_focus_seconds)
             self.table.setItem(row, 6, item_focus)
 
             item_life = SortableTableWidgetItem(format_seconds_to_text(app.total_lifetime_seconds))
             item_life.setData(Qt.UserRole, app.total_lifetime_seconds)
+            item_life.setData(_BASE_TOTAL_ROLE, app.total_lifetime_seconds)
             self.table.setItem(row, 7, item_life)
 
         self._restore_sort()
@@ -219,8 +222,13 @@ class AppTableManager(QObject):
             if not item_total_focus or not item_total_life:
                 continue
 
-            base_focus = item_total_focus.data(Qt.UserRole) or 0
-            base_life = item_total_life.data(Qt.UserRole) or 0
+            base_focus = item_total_focus.data(_BASE_TOTAL_ROLE)
+            base_life = item_total_life.data(_BASE_TOTAL_ROLE)
+
+            if base_focus is None:
+                base_focus = item_total_focus.data(Qt.UserRole) or 0
+            if base_life is None:
+                base_life = item_total_life.data(Qt.UserRole) or 0
 
             if exe_path in status_data:
                 data = status_data[exe_path]
@@ -249,6 +257,14 @@ class AppTableManager(QObject):
                 item_total_life.setData(Qt.UserRole, current_total_life)
             else:
                 if current_status_widget and current_status_widget.property("status_color") != "#cbd5e0":
+                    final_focus = item_total_focus.data(Qt.UserRole)
+                    final_life = item_total_life.data(Qt.UserRole)
+
+                    if final_focus is not None:
+                        item_total_focus.setData(_BASE_TOTAL_ROLE, final_focus)
+                    if final_life is not None:
+                        item_total_life.setData(_BASE_TOTAL_ROLE, final_life)
+
                     status_item = self.table.item(row, 0)
                     if status_item:
                         status_item.setData(Qt.UserRole, 0)
@@ -262,8 +278,13 @@ class AppTableManager(QObject):
                     item_cur_run.setData(Qt.UserRole, _NOT_RUNNING)
                     self.table.setItem(row, 3, item_cur_run)
 
-                    item_total_focus.setText(format_seconds_to_text(base_focus))
-                    item_total_life.setText(format_seconds_to_text(base_life))
+                    final_focus = item_total_focus.data(_BASE_TOTAL_ROLE) or base_focus
+                    final_life = item_total_life.data(_BASE_TOTAL_ROLE) or base_life
+
+                    item_total_focus.setText(format_seconds_to_text(final_focus))
+                    item_total_life.setText(format_seconds_to_text(final_life))
+                    item_total_focus.setData(Qt.UserRole, final_focus)
+                    item_total_life.setData(Qt.UserRole, final_life)
         self.table.setSortingEnabled(True)
 
     def _on_double_clicked(self, index):
@@ -338,16 +359,30 @@ class AppTableManager(QObject):
         self.table.setSortingEnabled(True)
 
     def _adjust_name_column_width(self):
-        fm = QFontMetrics(self.table.font())
-        max_width = 0
+        name_col = 1
+
+        cell_fm = QFontMetrics(self.table.font())
+        header_fm = QFontMetrics(self.table.horizontalHeader().font())
+
+        header_item = self.table.horizontalHeaderItem(name_col)
+        header_text = header_item.text() if header_item else "应用名称"
+
+        header_text_width = header_fm.horizontalAdvance(header_text)
+        header_min_width = header_text_width + 60
+
+        max_content_width = 0
+
         for row in range(self.table.rowCount()):
-            item = self.table.item(row, 1)
+            item = self.table.item(row, name_col)
             if item:
-                w = fm.horizontalAdvance(item.text())
-                if w > max_width:
-                    max_width = w
-        if max_width > 0:
-            self.table.setColumnWidth(1, max_width + 40)
+                text_width = cell_fm.horizontalAdvance(item.text())
+                max_content_width = max(max_content_width, text_width)
+
+        content_width = max_content_width + 40
+
+        final_width = max(header_min_width, content_width)
+
+        self.table.setColumnWidth(name_col, final_width)
 
     def _emit_table_width_hint(self):   
         total = 0
@@ -355,4 +390,4 @@ class AppTableManager(QObject):
             total += self.table.columnWidth(col)
         if self.table.verticalScrollBar().isVisible():
             total += self.table.verticalScrollBar().width()
-        self.table_width_hint.emit(total+80)
+        self.table_width_hint.emit(total+90)

@@ -214,7 +214,11 @@ __marimo__/
 *text
 
 #database
-*.db
+client/data/*
+!client/data/.gitkeep
+
+#bak
+_bak/
 
 #vscodeSetting
 .vscode

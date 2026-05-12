@@ -139,6 +139,25 @@ QLineEdit::placeholder {
     color: #94a3b8;
 }
 
+QLineEdit[search="true"] {
+    padding: 5px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #334155;
+    padding-right: 20px;
+}
+
+QLineEdit[search="true"]:focus {
+    border: 1px solid #3b82f6;
+}
+
+QLineEdit[search="true"]::clear-button {
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    padding-right: 4px;
+}
+
 /* ---- 表格 ---- */
 QTableWidget {
     background-color: #ffffff;
@@ -477,6 +496,25 @@ QLineEdit:focus {
 
 QLineEdit::placeholder {
     color: #64748b;
+}
+
+QLineEdit[search="true"] {
+    padding: 5px 10px;
+    border: 1px solid #475569;
+    border-radius: 8px;
+    background: #1e293b;
+    color: #f1f5f9;
+    padding-right: 20px;
+}
+
+QLineEdit[search="true"]:focus {
+    border: 1px solid #3b82f6;
+}
+
+QLineEdit[search="true"]::clear-button {
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    padding-right: 4px;
 }
 
 /* ---- 表格 ---- */
