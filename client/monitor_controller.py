@@ -28,6 +28,18 @@ class MonitorController(QObject):
         if self._worker:
             self._worker.update_watch_list(new_list)
 
+    def pause(self):
+        if self._worker:
+            self._worker.pause()
+
+    def resume(self):
+        if self._worker:
+            self._worker.resume()
+
+    @property
+    def is_paused(self):
+        return self._worker.is_paused if self._worker else True
+
     def stop(self, timeout_ms=1500, dialog=None, status_text=""):
         if self._worker and self._thread and self._thread.isRunning():
             print("[MonitorController] 正在停止监控线程...")

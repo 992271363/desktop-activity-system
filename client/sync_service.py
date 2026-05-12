@@ -2,7 +2,7 @@
 from PySide6.QtCore import QObject, Signal, Slot, QTimer, Qt
 from sqlalchemy.orm import joinedload, Session
 from local_database import SessionLocal
-from local_models import FocusActivity, ProcessSession
+from local_models import FocusActivity, ProcessSession, AppUsageSummary
 from client_api import send_data_to_api
 from typing import List
 
@@ -10,7 +10,7 @@ def get_and_prepare_sync_data():
     db = SessionLocal()
     try:
         activities_to_sync = db.query(FocusActivity).options(
-            joinedload(FocusActivity.session).joinedload(ProcessSession.summary)
+            joinedload(FocusActivity.session).joinedload(ProcessSession.summary).joinedload(AppUsageSummary.application)
         ).filter(FocusActivity.synced == False).all()
         if not activities_to_sync:
             return [], []
@@ -20,7 +20,7 @@ def get_and_prepare_sync_data():
             if session_id not in sessions_map:
                 sessions_map[session_id] = {
                     "process_name": activity.session.process_name,
-                    "executable_path": activity.session.summary.executable_path,
+                    "executable_path": activity.session.summary.application.executable_path,
                     "session_start_time": activity.session.session_start_time.isoformat(),
                     "session_end_time": activity.session.session_end_time.isoformat(),
                     "total_lifetime_seconds": activity.session.total_lifetime_seconds,

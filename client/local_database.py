@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text, event
 from sqlalchemy.orm import sessionmaker
 from local_models import Base
 
@@ -17,6 +17,13 @@ engine = create_engine(
     connect_args={"check_same_thread": False}
 )
 
+
+@event.listens_for(engine, "connect")
+def enable_sqlite_foreign_keys(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
 #创建数据库会话
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -26,4 +33,14 @@ def create_db_and_tables():
     在应用首次启动时调用，用于创建数据库文件和所有表。
     """
     Base.metadata.create_all(bind=engine)
+
+    # 增量迁移：给已有表添加新列（如果不存在）
+    with engine.connect() as conn:
+        try:
+            conn.execute(text(
+                "ALTER TABLE watched_applications ADD COLUMN is_watched BOOLEAN NOT NULL DEFAULT 1"
+            ))
+            conn.commit()
+        except Exception:
+            pass  # 列已存在则跳过
 

@@ -2,36 +2,58 @@ import datetime
 from sqlalchemy.orm import Session
 from local_models import (WatchedApplication, AppUsageSummary,
                             ProcessSession, FocusActivity)
+from path_utils import normalize_exe_path
+
+
 def add_or_get_watched_app(db: Session, executable_path: str, executable_name: str):
     """
-    核心交互逻辑：检查一个应用是否已被监视。
-    如果没被监视，则创建新记录；如果已被监视，则直接返回现有记录。
+    检查一个应用是否已被监视。
+    如果未监视，创建新记录；如果已存在，恢复监视并返回。
+    同时保证每个应用都有一条 AppUsageSummary。
     """
-    # 尝试查找已存在的 WatchedApplication
-    watched_app = db.query(WatchedApplication).filter(WatchedApplication.executable_path == executable_path).first()
+    executable_path = normalize_exe_path(executable_path)
 
-    if not watched_app:
-        print(f"[Tracking Service] 新程序: '{executable_name}' @ '{executable_path}'，正在添加到监视列表...")
-        # 创建新的 WatchedApplication
-        new_watched_app = WatchedApplication(executable_name=executable_name, executable_path=executable_path)
-        # 同时为它创建一个空的 AppUsageSummary
-        new_summary = AppUsageSummary(
-            executable_path=executable_path,
-            total_lifetime_seconds=0,
-            total_focus_time_seconds=0,
-        )
+    watched_app = db.query(WatchedApplication).filter(
+        WatchedApplication.executable_path == executable_path
+    ).first()
 
-        new_watched_app.summary = new_summary
+    if watched_app:
+        watched_app.executable_name = executable_name
+        watched_app.is_watched = True
+        if not watched_app.launch_path:
+            watched_app.launch_path = executable_path
 
-        db.add(new_watched_app)
+        summary = db.query(AppUsageSummary).filter(
+            AppUsageSummary.application_id == watched_app.id
+        ).first()
+        if not summary:
+            summary = AppUsageSummary(
+                application_id=watched_app.id,
+            )
+            db.add(summary)
+
         db.commit()
-        db.refresh(new_watched_app)
-        print(f"[Tracking Service] '{executable_name}' 添加成功。")
-        return new_watched_app.summary
-    else:
-        print(f"[Tracking Service] 已识别程序: '{executable_name}' @ '{executable_path}'。")
-        # 如果已存在，直接返回其关联的 summary
-        return watched_app.summary
+        db.refresh(watched_app)
+        return watched_app
+
+    new_watched_app = WatchedApplication(
+        executable_name=executable_name,
+        executable_path=executable_path,
+        launch_path=executable_path,
+        is_watched=True,
+    )
+    db.add(new_watched_app)
+    db.flush()
+
+    summary = AppUsageSummary(
+        application_id=new_watched_app.id,
+    )
+    db.add(summary)
+
+    db.commit()
+    db.refresh(new_watched_app)
+    return new_watched_app
+
 
 def record_process_session(
     db: Session,
@@ -39,7 +61,7 @@ def record_process_session(
     executable_name: str,
     start_time: datetime.datetime,
     end_time: datetime.datetime,
-    focus_details: dict  # <-- 参数从 focus_seconds: int 变更为 focus_details: dict
+    focus_details: dict
 ):
     """
     当一个被监视的进程结束时，调用此函数。
@@ -48,20 +70,31 @@ def record_process_session(
     """
     print(f"[Tracking Service] 正在为 '{executable_name}' @ '{executable_path}' 记录一个新会话...")
 
-    # 1. 查找对应的总账 (AppUsageSummary)
-    summary = db.query(AppUsageSummary).filter(AppUsageSummary.executable_path == executable_path).first()
+    executable_path = normalize_exe_path(executable_path)
+
+    # 1. 获取或创建应用，并确保应用有 summary
+    watched_app = add_or_get_watched_app(db, executable_path, executable_name)
+
+    summary = db.query(AppUsageSummary).filter(
+        AppUsageSummary.application_id == watched_app.id
+    ).first()
     if not summary:
-        print(f"[Tracking Service] 错误：找不到 '{executable_path}' 的汇总记录，无法更新！")
-        return
+        summary = AppUsageSummary(
+            application_id=watched_app.id,
+        )
+        db.add(summary)
+        db.flush()
+
     # 2. 计算本次会话的总时长和总焦点时长
     total_lifetime = int((end_time - start_time).total_seconds())
-    total_focus_time = sum(focus_details.values()) # 从字典的值中计算总和
+    total_focus_time = int(sum(focus_details.values()))
     if total_lifetime <= 1:
         print(f"[Tracking Service] 会话时长过短 ({total_lifetime}s)，已忽略。")
         return
-    # 3. 创建一条新的“会话”记录 (ProcessSession)
+
+    # 3. 创建一条新的"会话"记录 (ProcessSession)
     new_session = ProcessSession(
-        summary=summary,  # 通过关系直接关联到总账
+        summary=summary,
         process_name=executable_name,
         session_start_time=start_time,
         session_end_time=end_time,
@@ -70,7 +103,8 @@ def record_process_session(
     )
     db.add(new_session)
     print(f"[Tracking Service] -> 已创建会话记录: {start_time.strftime('%H:%M:%S')} - {end_time.strftime('%H:%M:%S')}")
-    # 4. 在“会话”下为每个窗口标题创建“焦点活动”记录 (FocusActivity)
+
+    # 4. 在"会话"下为每个窗口标题创建"焦点活动"记录 (FocusActivity)
     if not focus_details:
         print("[Tracking Service] -> 该会话没有检测到焦点活动。")
     else:
@@ -79,12 +113,13 @@ def record_process_session(
             focus_seconds_int = int(focus_seconds)
             if focus_seconds_int > 0:
                 activity = FocusActivity(
-                    session=new_session,  # 通过关系关联到刚刚创建的会话
+                    session=new_session,
                     window_title=title,
                     focus_duration_seconds=focus_seconds_int
                 )
                 db.add(activity)
                 print(f"[Tracking Service]     - 焦点活动: '{title}' ({focus_seconds}s)")
+
     # 5. 更新总账 (AppUsageSummary)
     summary.total_lifetime_seconds += total_lifetime
     summary.total_focus_time_seconds += total_focus_time
@@ -92,9 +127,9 @@ def record_process_session(
         summary.first_seen_at = start_time
     summary.last_seen_start_at = start_time
     summary.last_seen_end_at = end_time
-    
+
     print(f"[Tracking Service] -> 正在更新总账: lifetime +{total_lifetime}s, focus +{total_focus_time}s")
-    
+
     # 6. 提交所有更改
     try:
         db.commit()

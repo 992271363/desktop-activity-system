@@ -99,6 +99,25 @@ QPushButton[danger="true"]:hover {
     background-color: #dc2626;
 }
 
+/* 监控暂停按钮（绿色 = 暂停中，蓝色 = 默认监控中） */
+QPushButton[paused="true"] {
+    background-color: #16a34a;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 16px;
+    min-height: 28px;
+    font-weight: 500;
+}
+
+QPushButton[paused="true"]:hover {
+    background-color: #15803d;
+}
+
+QPushButton[paused="true"]:pressed {
+    background-color: #166534;
+}
+
 /* 拾取窗口按钮 */
 QPushButton[crosshair="true"] {
     background-color: #f0fdf4;
@@ -155,7 +174,8 @@ QLineEdit[search="true"]:focus {
 QLineEdit[search="true"]::clear-button {
     subcontrol-origin: padding;
     subcontrol-position: center right;
-    padding-right: 4px;
+    padding: 0;
+    margin-right: 4px;
 }
 
 /* ---- 表格 ---- */
@@ -457,6 +477,25 @@ QPushButton[danger="true"]:hover {
     background-color: #dc2626;
 }
 
+/* 监控暂停按钮（绿色 = 暂停中，蓝色 = 默认监控中） */
+QPushButton[paused="true"] {
+    background-color: #16a34a;
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 16px;
+    min-height: 28px;
+    font-weight: 500;
+}
+
+QPushButton[paused="true"]:hover {
+    background-color: #15803d;
+}
+
+QPushButton[paused="true"]:pressed {
+    background-color: #166534;
+}
+
 /* 拾取窗口按钮 */
 QPushButton[crosshair="true"] {
     background-color: #064e3b;
@@ -514,7 +553,8 @@ QLineEdit[search="true"]:focus {
 QLineEdit[search="true"]::clear-button {
     subcontrol-origin: padding;
     subcontrol-position: center right;
-    padding-right: 4px;
+    padding: 0;
+    margin-right: 4px;
 }
 
 /* ---- 表格 ---- */

@@ -86,6 +86,13 @@ class AppDetailDialog(QDialog):
         line.setFrameShape(QFrame.HLine)
         layout.addRow(line)
 
+        layout.addRow("进程路径:", QLabel(app_data.executable_path))
+        layout.addRow("启动路径:", QLabel(app_data.launch_path or app_data.executable_path))
+
+        line_path = QFrame()
+        line_path.setFrameShape(QFrame.HLine)
+        layout.addRow(line_path)
+
         summary = app_data.summary
 
         def fmt_time(dt):

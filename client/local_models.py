@@ -1,74 +1,291 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey
+import uuid
+
+from sqlalchemy import (
+    Column,
+    Integer,
+    BigInteger,
+    String,
+    Date,
+    DateTime,
+    Boolean,
+    ForeignKey,
+    UniqueConstraint,
+    CheckConstraint,
+    Index,
+)
+
 from sqlalchemy.orm import declarative_base, relationship
+
+
 Base = declarative_base()
 
-# 存储用户选择要自动监视的exe
+
+def generate_uid():
+    return uuid.uuid4().hex
+
+
 class WatchedApplication(Base):
+    __tablename__ = "watched_applications"
 
-    __tablename__ = 'watched_applications'
     id = Column(Integer, primary_key=True)
+    uid = Column(String, nullable=False, unique=True, default=generate_uid)
+
     executable_name = Column(String, nullable=False)
-    executable_path = Column(String, nullable=False, unique=True)
-    summary = relationship("AppUsageSummary", back_populates="application", uselist=False, cascade="all, delete-orphan")
-    def __repr__(self):
-        return f"<WatchedApplication(exe='{self.executable_name}', path='{self.executable_path}')>"
+    executable_path = Column(String, nullable=False, unique=True, index=True)
 
-# 用于存储每个被监视的可执行文件的累计使用情况。
+    launch_path = Column(String, nullable=True)
+    is_process_path_different = Column(Boolean, nullable=False, default=False)
+    is_path_exist = Column(Boolean, nullable=False, default=True)
+    is_watched = Column(Boolean, nullable=False, default=True)
+
+    summary = relationship(
+        "AppUsageSummary",
+        back_populates="application",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    daily_usages = relationship(
+        "AppDailyUsage",
+        back_populates="application",
+        cascade="all, delete-orphan",
+    )
+
+    def __repr__(self):
+        return (
+            f"<WatchedApplication("
+            f"id={self.id}, "
+            f"uid='{self.uid}', "
+            f"exe='{self.executable_name}', "
+            f"path='{self.executable_path}', "
+            f"launch_path='{self.launch_path}'"
+            f")>"
+        )
+
+
 class AppUsageSummary(Base):
-    __tablename__ = 'app_usage_summary'
+    __tablename__ = "app_usage_summary"
+
     id = Column(Integer, primary_key=True)
-    # 使用外键关联到被监视的程序
-    executable_path = Column(String, ForeignKey('watched_applications.executable_path'), nullable=False, unique=True)
-    # 第一次启动时间
+
+    application_id = Column(
+        Integer,
+        ForeignKey("watched_applications.id"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
     first_seen_at = Column(DateTime, nullable=True)
-    # 最后一次启动时间
     last_seen_start_at = Column(DateTime, nullable=True)
-    # 最后一次停止时间
     last_seen_end_at = Column(DateTime, nullable=True)
-    # 累计的总存活时长（秒）
-    total_lifetime_seconds = Column(Integer, nullable=False, default=0)
-    # 累计的总焦点时长（秒）
-    total_focus_time_seconds = Column(Integer, nullable=False, default=0)
-    # 建立关系
-    application = relationship("WatchedApplication", back_populates="summary")
-    sessions = relationship("ProcessSession", back_populates="summary", cascade="all, delete-orphan")
+
+    total_lifetime_seconds = Column(BigInteger, nullable=False, default=0)
+    total_focus_time_seconds = Column(BigInteger, nullable=False, default=0)
+
+    application = relationship(
+        "WatchedApplication",
+        back_populates="summary",
+    )
+
+    sessions = relationship(
+        "ProcessSession",
+        back_populates="summary",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "total_lifetime_seconds >= 0",
+            name="ck_summary_lifetime_non_negative",
+        ),
+        CheckConstraint(
+            "total_focus_time_seconds >= 0",
+            name="ck_summary_focus_non_negative",
+        ),
+        CheckConstraint(
+            "total_focus_time_seconds <= total_lifetime_seconds",
+            name="ck_summary_focus_lte_lifetime",
+        ),
+    )
+
     def __repr__(self):
-        return (f"<AppUsageSummary(path='{self.executable_path}', "
-                f"lifetime={self.total_lifetime_seconds}s, focus={self.total_focus_time_seconds}s)>")
+        return (
+            f"<AppUsageSummary("
+            f"application_id={self.application_id}, "
+            f"lifetime={self.total_lifetime_seconds}s, "
+            f"focus={self.total_focus_time_seconds}s"
+            f")>"
+        )
 
-# 存储每个被监视的可执行文件的每个会话的详细信息。
+
+class AppDailyUsage(Base):
+    __tablename__ = "app_daily_usage"
+
+    id = Column(Integer, primary_key=True)
+
+    application_id = Column(
+        Integer,
+        ForeignKey("watched_applications.id"),
+        nullable=False,
+        index=True,
+    )
+
+    date = Column(Date, nullable=False, index=True)
+
+    lifetime_seconds = Column(BigInteger, nullable=False, default=0)
+    focus_seconds = Column(BigInteger, nullable=False, default=0)
+
+    synced = Column(Boolean, nullable=False, default=False)
+
+    application = relationship(
+        "WatchedApplication",
+        back_populates="daily_usages",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "application_id",
+            "date",
+            name="uq_app_daily_usage_application_date",
+        ),
+        CheckConstraint(
+            "lifetime_seconds >= 0",
+            name="ck_daily_lifetime_non_negative",
+        ),
+        CheckConstraint(
+            "focus_seconds >= 0",
+            name="ck_daily_focus_non_negative",
+        ),
+        CheckConstraint(
+            "focus_seconds <= lifetime_seconds",
+            name="ck_daily_focus_lte_lifetime",
+        ),
+        Index("idx_app_daily_usage_synced", "synced"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<AppDailyUsage("
+            f"application_id={self.application_id}, "
+            f"date={self.date}, "
+            f"lifetime={self.lifetime_seconds}s, "
+            f"focus={self.focus_seconds}s"
+            f")>"
+        )
+
+
 class ProcessSession(Base):
-    __tablename__ = 'process_sessions'
-    id = Column(Integer, primary_key=True)
-    
-    # 外键，关联到总账
-    summary_id = Column(Integer, ForeignKey('app_usage_summary.id'), nullable=False)
-    
-    # 本次会话的宏观数据
-    process_name = Column(String, nullable=False)
-    session_start_time = Column(DateTime, nullable=False)
-    session_end_time = Column(DateTime, nullable=False)
-    total_lifetime_seconds = Column(Integer, nullable=False)
-    
-    # 累计的总焦点时长（秒）
-    total_focus_seconds = Column(Integer, nullable=False, default=0)
-    # 建立关系
-    summary = relationship("AppUsageSummary", back_populates="sessions")
-    activities = relationship("FocusActivity", back_populates="session", cascade="all, delete-orphan")
+    __tablename__ = "process_sessions"
 
-# 存储每个被监视的可执行文件的每个会话的微观数据。
-class FocusActivity(Base):
-    __tablename__ = 'focus_activities'
     id = Column(Integer, primary_key=True)
-    
-    # 外键，关联到某一次“会话”
-    session_id = Column(Integer, ForeignKey('process_sessions.id'), nullable=False)
-    
-    # 本次活动的微观数据
+
+    summary_id = Column(
+        Integer,
+        ForeignKey("app_usage_summary.id"),
+        nullable=False,
+        index=True,
+    )
+
+    process_name = Column(String, nullable=False)
+
+    session_start_time = Column(DateTime, nullable=False, index=True)
+    session_end_time = Column(DateTime, nullable=True)
+
+    total_lifetime_seconds = Column(BigInteger, nullable=False, default=0)
+    total_focus_seconds = Column(BigInteger, nullable=False, default=0)
+
+    synced = Column(Boolean, nullable=False, default=False)
+
+    summary = relationship(
+        "AppUsageSummary",
+        back_populates="sessions",
+    )
+
+    activities = relationship(
+        "FocusActivity",
+        back_populates="session",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "total_lifetime_seconds >= 0",
+            name="ck_session_lifetime_non_negative",
+        ),
+        CheckConstraint(
+            "total_focus_seconds >= 0",
+            name="ck_session_focus_non_negative",
+        ),
+        CheckConstraint(
+            "total_focus_seconds <= total_lifetime_seconds",
+            name="ck_session_focus_lte_lifetime",
+        ),
+        CheckConstraint(
+            "session_end_time IS NULL OR session_end_time >= session_start_time",
+            name="ck_session_end_after_start",
+        ),
+        Index("idx_process_sessions_synced", "synced"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<ProcessSession("
+            f"summary_id={self.summary_id}, "
+            f"process_name='{self.process_name}', "
+            f"start='{self.session_start_time}', "
+            f"end='{self.session_end_time}', "
+            f"lifetime={self.total_lifetime_seconds}s, "
+            f"focus={self.total_focus_seconds}s"
+            f")>"
+        )
+
+
+class FocusActivity(Base):
+    __tablename__ = "focus_activities"
+
+    id = Column(Integer, primary_key=True)
+
+    session_id = Column(
+        Integer,
+        ForeignKey("process_sessions.id"),
+        nullable=False,
+        index=True,
+    )
+
     window_title = Column(String, nullable=False)
-    focus_duration_seconds = Column(Integer, nullable=False)
-    
-    synced = Column(Boolean, default=False, nullable=False) # 同步标记仍然需要
-    
-    # 建立关系
-    session = relationship("ProcessSession", back_populates="activities")
+
+    focus_start_time = Column(DateTime, nullable=True, index=True)
+    focus_end_time = Column(DateTime, nullable=True)
+
+    focus_duration_seconds = Column(BigInteger, nullable=False, default=0)
+
+    synced = Column(Boolean, nullable=False, default=False)
+
+    session = relationship(
+        "ProcessSession",
+        back_populates="activities",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "focus_duration_seconds >= 0",
+            name="ck_focus_duration_non_negative",
+        ),
+        CheckConstraint(
+            "focus_start_time IS NULL OR focus_end_time IS NULL OR focus_end_time >= focus_start_time",
+            name="ck_focus_end_after_start",
+        ),
+        Index("idx_focus_activities_synced", "synced"),
+    )
+
+    def __repr__(self):
+        return (
+            f"<FocusActivity("
+            f"session_id={self.session_id}, "
+            f"title='{self.window_title}', "
+            f"start='{self.focus_start_time}', "
+            f"end='{self.focus_end_time}', "
+            f"duration={self.focus_duration_seconds}s"
+            f")>"
+        )

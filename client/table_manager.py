@@ -16,6 +16,9 @@ _collator.setCaseSensitivity(Qt.CaseInsensitive)
 
 _NOT_RUNNING = -1
 _BASE_TOTAL_ROLE = Qt.UserRole + 100
+_IS_WATCHED_ROLE = Qt.UserRole + 200
+_IS_PATH_EXIST_ROLE = Qt.UserRole + 201
+_LAUNCH_PATH_ROLE = Qt.UserRole + 202
 
 
 class StyledHeaderView(QHeaderView):
@@ -108,7 +111,8 @@ class SortableTableWidgetItem(QTableWidgetItem):
 class AppTableManager(QObject):
     detail_requested = Signal(str)
     launch_requested = Signal(str)
-    delete_requested = Signal(str, str)
+    watch_toggled_requested = Signal(str, bool)
+    hard_delete_requested = Signal(str, str)
     table_width_hint = Signal(int)
 
     def __init__(self, table_widget: QTableWidget, parent=None, settings: Settings = None):
@@ -149,17 +153,20 @@ class AppTableManager(QObject):
         
 
     @staticmethod
-    def _create_status_label(color_hex: str):
+    def _create_status_label(color_hex: str, tooltip: str = ""):
         container = QWidget()
         container.setStyleSheet("background: transparent;")
+        container.setToolTip(tooltip)
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setAlignment(Qt.AlignCenter)
         dot = QLabel()
         dot.setFixedSize(14, 14)
         dot.setStyleSheet(f"background-color: {color_hex}; border-radius: 7px;")
+        dot.setToolTip(tooltip)
         layout.addWidget(dot)
         container.setProperty("status_color", color_hex)
+        container.setProperty("status_text", tooltip)
         return container
 
     def refresh(self, apps: List[AppInfo]):
@@ -169,13 +176,30 @@ class AppTableManager(QObject):
             row = self.table.rowCount()
             self.table.insertRow(row)
 
+            # 状态列：根据 is_watched / is_path_exist 决定颜色
+            if not app.is_path_exist:
+                status_color = "#f59e0b"
+                status_text = "路径不存在"
+                status_value = -2
+            elif not app.is_watched:
+                status_color = "#e2e8f0"
+                status_text = "未监视"
+                status_value = -1
+            else:
+                status_color = "#cbd5e0"
+                status_text = "未运行"
+                status_value = 0
+
             status_item = SortableTableWidgetItem("")
-            status_item.setData(Qt.UserRole, 0)
+            status_item.setData(Qt.UserRole, status_value)
             self.table.setItem(row, 0, status_item)
-            self.table.setCellWidget(row, 0, self._create_status_label("#cbd5e0"))
+            self.table.setCellWidget(row, 0, self._create_status_label(status_color, status_text))
 
             name_item = SortableTableWidgetItem(Path(app.exe_name).stem)
             name_item.setData(Qt.UserRole, app.exe_path)
+            name_item.setData(_LAUNCH_PATH_ROLE, app.launch_path or app.exe_path)
+            name_item.setData(_IS_WATCHED_ROLE, app.is_watched)
+            name_item.setData(_IS_PATH_EXIST_ROLE, app.is_path_exist)
             self.table.setItem(row, 1, name_item)
 
             item_cur_focus = SortableTableWidgetItem("-")
@@ -214,6 +238,33 @@ class AppTableManager(QObject):
             exe_name_item = self.table.item(row, 1)
             if not exe_name_item:
                 continue
+
+            is_path_exist = exe_name_item.data(_IS_PATH_EXIST_ROLE)
+            is_watched = exe_name_item.data(_IS_WATCHED_ROLE)
+
+            # 路径不存在：保持黄色，跳过
+            if is_path_exist is False:
+                self.table.setCellWidget(
+                    row, 0, self._create_status_label("#f59e0b", "路径不存在")
+                )
+                continue
+
+            # 未监视：保持浅灰，跳过
+            if is_watched is False:
+                status_item = self.table.item(row, 0)
+                if status_item:
+                    status_item.setData(Qt.UserRole, -1)
+                self.table.setCellWidget(
+                    row, 0, self._create_status_label("#e2e8f0", "未监视")
+                )
+                item_cur_focus = SortableTableWidgetItem("-")
+                item_cur_focus.setData(Qt.UserRole, _NOT_RUNNING)
+                self.table.setItem(row, 2, item_cur_focus)
+                item_cur_run = SortableTableWidgetItem("-")
+                item_cur_run.setData(Qt.UserRole, _NOT_RUNNING)
+                self.table.setItem(row, 3, item_cur_run)
+                continue
+
             exe_path = exe_name_item.data(Qt.UserRole)
             current_status_widget = self.table.cellWidget(row, 0)
 
@@ -287,6 +338,37 @@ class AppTableManager(QObject):
                     item_total_life.setData(Qt.UserRole, final_life)
         self.table.setSortingEnabled(True)
 
+    def set_row_watched_state(self, exe_path: str, watched: bool):
+        """只更新指定行的监视状态，不重建整张表。"""
+        for row in range(self.table.rowCount()):
+            name_item = self.table.item(row, 1)
+            if not name_item or name_item.data(Qt.UserRole) != exe_path:
+                continue
+
+            name_item.setData(_IS_WATCHED_ROLE, watched)
+
+            if not watched:
+                status_item = self.table.item(row, 0)
+                if status_item:
+                    status_item.setData(Qt.UserRole, -1)
+                self.table.setCellWidget(
+                    row, 0, self._create_status_label("#e2e8f0", "未监视")
+                )
+                item_cur_focus = SortableTableWidgetItem("-")
+                item_cur_focus.setData(Qt.UserRole, _NOT_RUNNING)
+                self.table.setItem(row, 2, item_cur_focus)
+                item_cur_run = SortableTableWidgetItem("-")
+                item_cur_run.setData(Qt.UserRole, _NOT_RUNNING)
+                self.table.setItem(row, 3, item_cur_run)
+            else:
+                status_item = self.table.item(row, 0)
+                if status_item:
+                    status_item.setData(Qt.UserRole, 0)
+                self.table.setCellWidget(
+                    row, 0, self._create_status_label("#cbd5e0", "未运行")
+                )
+            break
+
     def _on_double_clicked(self, index):
         row = index.row()
         exe_path = self._get_exe_path_by_row(row)
@@ -294,37 +376,59 @@ class AppTableManager(QObject):
             self.detail_requested.emit(exe_path)
 
     def _on_context_menu(self, pos):
+        row = self.table.currentRow()
+        if row < 0:
+            return
+
+        name_item = self.table.item(row, 1)
+        if not name_item:
+            return
+
+        exe_name = name_item.text()
+        exe_path = name_item.data(Qt.UserRole)
+        is_watched = bool(name_item.data(_IS_WATCHED_ROLE))
+
         menu = QMenu()
         detail_action = menu.addAction("查看详细信息")
         launch_action = menu.addAction("启动此应用")
-        delete_action = menu.addAction("不再监控此应用")
+        menu.addSeparator()
+        toggle_watch_action = menu.addAction("停止监视" if is_watched else "恢复监视")
+        hard_delete_action = menu.addAction("彻底删除此应用...")
+
         action = menu.exec(self.table.mapToGlobal(pos))
 
         if action == detail_action:
-            idx = self.table.currentIndex()
-            if idx.isValid():
-                exe_path = self._get_exe_path_by_row(idx.row())
-                if exe_path:
-                    self.detail_requested.emit(exe_path)
+            self.detail_requested.emit(exe_path)
         elif action == launch_action:
-            row = self.table.currentRow()
-            if row >= 0:
-                exe_path = self._get_exe_path_by_row(row)
-                if exe_path:
-                    self.launch_requested.emit(exe_path)
-        elif action == delete_action:
-            row = self.table.currentRow()
-            if row >= 0:
-                exe_name = self.table.item(row, 1).text()
-                exe_path = self._get_exe_path_by_row(row)
-                if exe_path:
-                    reply = QMessageBox.question(
-                        self.table, "确认",
-                        f"确定移除 {exe_name} 吗？\n历史数据会保留。",
-                        QMessageBox.Yes | QMessageBox.No
-                    )
-                    if reply == QMessageBox.Yes:
-                        self.delete_requested.emit(exe_path, exe_name)
+            launch_path = name_item.data(_LAUNCH_PATH_ROLE) or exe_path
+            self.launch_requested.emit(launch_path)
+        elif action == toggle_watch_action:
+            self.watch_toggled_requested.emit(exe_path, not is_watched)
+        elif action == hard_delete_action:
+            if self._confirm_hard_delete(exe_name):
+                self.hard_delete_requested.emit(exe_path, exe_name)
+
+    def _confirm_hard_delete(self, exe_name: str) -> bool:
+        first = QMessageBox.warning(
+            self.table,
+            "删除应用",
+            f"确定要彻底删除「{exe_name}」吗？\n\n"
+            "这会删除该应用的历史统计、会话记录和焦点记录。",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if first != QMessageBox.Yes:
+            return False
+
+        second = QMessageBox.critical(
+            self.table,
+            "再次确认",
+            f"此操作不可恢复。\n\n"
+            f"是否确认永久删除「{exe_name}」的所有数据？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        return second == QMessageBox.Yes
 
     def _get_exe_path_by_row(self, row: int) -> str:
         item = self.table.item(row, 1)

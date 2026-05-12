@@ -2,5 +2,6 @@
   "closeToTray": "exit",
   "tableSortColumn": 6,
   "tableSortOrder": "desc",
-  "themeMode": "dark"
+  "themeMode": "dark",
+  "monitorEnabled": true
 }

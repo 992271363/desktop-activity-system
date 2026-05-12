@@ -6,6 +6,7 @@ import win32gui
 import win32process
 from PySide6.QtCore import QObject, Signal, QMutex, QMutexLocker
 from typing import List, Dict, TypedDict
+from path_utils import normalize_exe_path
 
 # --- 基础类型 ---
 class ProcessInfo(TypedDict):
@@ -53,8 +54,12 @@ class GlobalMonitorWorker(QObject):
         watched_apps_info: List[(exe_path, exe_name), ...]
         """
         super().__init__()
-        self._target_apps = {path.lower(): (path, name) for path, name in watched_apps_info}
+        self._target_apps = {
+            normalize_exe_path(path): (normalize_exe_path(path), name)
+            for path, name in watched_apps_info
+        }
         self._running = True
+        self._paused = False
         self._mutex = QMutex()
         self._active_sessions: Dict[int, ActiveSession] = {}
         self._last_tick = None
@@ -64,17 +69,37 @@ class GlobalMonitorWorker(QObject):
         new_list: List[(exe_path, exe_name), ...]
         """
         with QMutexLocker(self._mutex):
-            self._target_apps = {path.lower(): (path, name) for path, name in new_list}
+            self._target_apps = {
+                normalize_exe_path(path): (normalize_exe_path(path), name)
+                for path, name in new_list
+            }
 
     def stop(self):
         self._running = False
+
+    def pause(self):
+        with QMutexLocker(self._mutex):
+            self._paused = True
+            # 暂停时关闭所有活跃会话
+            for session in list(self._active_sessions.values()):
+                self._save_session(session)
+            self._active_sessions.clear()
+
+    def resume(self):
+        with QMutexLocker(self._mutex):
+            self._paused = False
+
+    @property
+    def is_paused(self):
+        return self._paused
 
     def run(self):
         print("[Global Monitor] 服务启动...")
         while self._running:
             try:
-                self._check_processes_lifecycle_nonblocking()
-                self._check_focus_nonblocking(1.0)
+                if not self._paused:
+                    self._check_processes_lifecycle_nonblocking()
+                    self._check_focus_nonblocking(1.0)
                 self._emit_status()
 
                 # 灵敏等待，每 0.1 秒检查一次是否停止，总共 1 秒
@@ -100,12 +125,13 @@ class GlobalMonitorWorker(QObject):
                     continue
                 p_name = proc.info['name']
                 p_path = proc.info['exe']
-                p_path_lower = p_path.lower()
+                p_path_key = normalize_exe_path(p_path)
                 p_pid = proc.info['pid']
-                if p_path_lower in self._target_apps:
+                if p_path_key in self._target_apps:
+                    matched_path, matched_name = self._target_apps[p_path_key]
                     current_pids.add(p_pid)
                     if p_pid not in self._active_sessions:
-                        self._active_sessions[p_pid] = ActiveSession(p_pid, p_name, p_path, datetime.datetime.now())
+                        self._active_sessions[p_pid] = ActiveSession(p_pid, matched_name, matched_path, datetime.datetime.now())
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
 

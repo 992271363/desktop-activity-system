@@ -78,12 +78,48 @@ class Mywindow(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # ---- 工具栏 ----
+# ---- 工具栏 ----
         toolbar = QToolBar()
         toolbar.setMovable(False)
         toolbar.setFloatable(False)
         toolbar.setIconSize(QSize(18, 18))
-        toolbar.setStyleSheet("QToolBar { border: none; padding: 6px 8px; spacing: 6px; background: transparent; }")
+        toolbar.setToolButtonStyle(Qt.ToolButtonTextOnly)
+        toolbar.setStyleSheet("""
+            QToolBar {
+                border: none;
+                padding: 6px 8px;
+                spacing: 6px;
+                background: transparent;
+            }
+
+            QToolBar QToolButton {
+                min-height: 32px;
+                max-height: 32px;
+                padding: 0 10px;
+                margin: 0;
+            }
+
+            QToolBar QPushButton {
+                min-height: 32px;
+                max-height: 32px;
+                padding: 0 12px;
+                margin: 0;
+            }
+
+            QToolBar QLineEdit {
+                min-height: 32px;
+                max-height: 32px;
+                padding: 0 10px;
+                margin: 0;
+            }
+
+            QToolBar QLabel {
+                min-height: 32px;
+                max-height: 32px;
+                padding: 0 8px;
+                margin: 0;
+            }
+        """)
 
         if getattr(sys, 'frozen', False):
             self._base = sys._MEIPASS
@@ -91,14 +127,24 @@ class Mywindow(QMainWindow):
             self._base = os.path.dirname(os.path.abspath(__file__))
         base = self._base
 
+        self.btn_monitor_toggle = QPushButton("暂停监控")
+        self.btn_monitor_toggle.setToolTip("暂停/恢复全局监控")
+        self.btn_monitor_toggle.setFixedHeight(32)
+        toolbar.addWidget(self.btn_monitor_toggle)
+
         self.pushButton_procs = QPushButton("添加进程")
+        self.pushButton_procs.setFixedHeight(32)
+        toolbar.addWidget(self.pushButton_procs)
+
         self.btn_crosshair = PickButton("拾取窗口")
         self.btn_crosshair.setToolTip("按住后拖动到目标窗口上松开，自动添加监控")
         self.btn_crosshair.setProperty("crosshair", True)
+        self.btn_crosshair.setFixedHeight(32)
+
         crosshair_path = os.path.join(base, "icons", "crosshair.svg")
         self.btn_crosshair.setIcon(_themed_icon(crosshair_path, "#16a34a"))
+        self.btn_crosshair.setIconSize(QSize(18, 18))
 
-        toolbar.addWidget(self.pushButton_procs)
         toolbar.addWidget(self.btn_crosshair)
         toolbar.addSeparator()
 
@@ -106,13 +152,16 @@ class Mywindow(QMainWindow):
         self.search_edit.setPlaceholderText("搜索名称...")
         self.search_edit.setClearButtonEnabled(True)
         self.search_edit.setMinimumWidth(220)
-        self.search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.search_edit.setFixedHeight(32)
+        self.search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.search_edit.setToolTip("按应用名称或路径搜索，支持多个关键词")
         self.search_edit.setProperty("search", True)
         toolbar.addWidget(self.search_edit)
 
         self.user_show = QLabel("未登录")
-        self.user_show.setStyleSheet("padding: 4px 8px; color: #64748b; font-size: 12px;")
+        self.user_show.setFixedHeight(32)
+        self.user_show.setAlignment(Qt.AlignCenter)
+        self.user_show.setStyleSheet("color: #64748b; font-size: 12px;")
         toolbar.addWidget(self.user_show)
 
         self.login_action = toolbar.addAction("登录")
@@ -121,11 +170,13 @@ class Mywindow(QMainWindow):
 
         self.settings_button = QPushButton()
         self.settings_button.setToolTip("设置")
+
         gear_path = os.path.join(base, "icons", "gear.svg")
         self.settings_button.setIcon(_themed_icon(gear_path, "#475569"))
         self.settings_button.setProperty("settings", True)
-        self.settings_button.setFixedSize(44, 44)
-        self.settings_button.setIconSize(QSize(22, 22))
+        self.settings_button.setFixedSize(32, 32)
+        self.settings_button.setIconSize(QSize(18, 18))
+
         toolbar.addWidget(self.settings_button)
 
         self.addToolBar(toolbar)
@@ -156,7 +207,8 @@ class Mywindow(QMainWindow):
         self.table_manager = AppTableManager(self.tableWidget, self, self._settings)
         self.table_manager.detail_requested.connect(self._on_detail_requested)
         self.table_manager.launch_requested.connect(self._on_launch_requested)
-        self.table_manager.delete_requested.connect(self._on_delete_requested)
+        self.table_manager.watch_toggled_requested.connect(self._on_watch_toggled)
+        self.table_manager.hard_delete_requested.connect(self._on_hard_delete_requested)
         self.table_manager.table_width_hint.connect(self._adjust_window_width)
 
         self.monitor_controller = MonitorController(self)
@@ -172,6 +224,7 @@ class Mywindow(QMainWindow):
         self.pushButton_procs.clicked.connect(self.open_add_app_dialog)
         self.btn_crosshair.pick_requested.connect(self.start_pick_window)
         self.search_edit.textChanged.connect(self._apply_table_search)
+        self.btn_monitor_toggle.clicked.connect(self._toggle_monitor)
         self.settings_button.clicked.connect(self.open_settings_dialog)
         self.login_action.triggered.connect(self.open_login_dialog)
         self.logout_action.triggered.connect(self._logout)
@@ -185,6 +238,30 @@ class Mywindow(QMainWindow):
         self._refresh_table()
         self.monitor_controller.start(AppRepository.get_watched_apps_info())
         self.sync_controller.start()
+
+        # 读取监控开关状态
+        if not self._settings.get("monitorEnabled", True):
+            self.monitor_controller.pause()
+            self.btn_monitor_toggle.setText("恢复监控")
+            self.btn_monitor_toggle.setProperty("paused", True)
+            self.btn_monitor_toggle.setStyle(self.btn_monitor_toggle.style())
+            self.statusBar().showMessage("监控已暂停")
+
+    def _toggle_monitor(self):
+        if self.monitor_controller.is_paused:
+            self.monitor_controller.resume()
+            self.btn_monitor_toggle.setText("暂停监控")
+            self.btn_monitor_toggle.setProperty("paused", False)
+            self.btn_monitor_toggle.setStyle(self.btn_monitor_toggle.style())
+            self._settings.set("monitorEnabled", True)
+            self.statusBar().showMessage("监控已恢复", 3000)
+        else:
+            self.monitor_controller.pause()
+            self.btn_monitor_toggle.setText("恢复监控")
+            self.btn_monitor_toggle.setProperty("paused", True)
+            self.btn_monitor_toggle.setStyle(self.btn_monitor_toggle.style())
+            self._settings.set("monitorEnabled", False)
+            self.statusBar().showMessage("监控已暂停")
 
     def _setup_tray_icon(self):
         default_icon = self.style().standardIcon(QStyle.SP_ComputerIcon)
@@ -274,17 +351,25 @@ class Mywindow(QMainWindow):
             dialog = AppDetailDialog(app_data, self)
             dialog.exec()
 
-    def _on_launch_requested(self, exe_path: str):
+    def _on_launch_requested(self, launch_path: str):
         import os
         try:
-            os.startfile(exe_path)
+            os.startfile(launch_path)
         except Exception:
             pass
 
-    def _on_delete_requested(self, exe_path: str, exe_name: str):
-        AppRepository.delete_app_by_path(exe_path)
-        self._refresh_table()
+    def _on_watch_toggled(self, exe_path: str, watched: bool):
+        ok = AppRepository.set_app_watched(exe_path, watched)
+        if not ok:
+            return
+        self.table_manager.set_row_watched_state(exe_path, watched)
         self._refresh_monitor_list()
+
+    def _on_hard_delete_requested(self, exe_path: str, exe_name: str):
+        ok = AppRepository.delete_app_completely(exe_path)
+        if ok:
+            self._refresh_table()
+            self._refresh_monitor_list()
 
     def start_pick_window(self):
         QApplication.instance().installEventFilter(self._right_click_blocker)
