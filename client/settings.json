@@ -1,6 +1,6 @@
 {
   "closeToTray": "exit",
-  "tableSortColumn": 1,
+  "tableSortColumn": 6,
   "tableSortOrder": "desc",
   "themeMode": "dark"
 }

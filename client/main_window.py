@@ -1,15 +1,12 @@
 import time
 import os
 import sys
-import ctypes
 import psutil
 import win32gui
 import win32con
 import win32process
-import win32api
-
-from PySide6.QtCore import Qt, QTimer, QSize, QPoint
-from PySide6.QtGui import QAction, QIcon, QMouseEvent, QPixmap
+from PySide6.QtCore import Qt, QTimer, QSize, QObject, QEvent, Signal
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QDialog, QPushButton, QLabel,
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QSystemTrayIcon,
@@ -23,23 +20,34 @@ from sync_controller import SyncController
 from settings import Settings
 from settings_dialog import CloseAskDialog, SettingsDialog
 from size_grip import StyledSizeGrip
+from pick_overlay import PickOverlay, PickButton
 
 from dialogs import AppDetailDialog, ClosingDialog, AddAppDialog
 from login_dialog import LoginDialog
 from sync_service import get_and_prepare_sync_data, mark_activities_as_synced
 from client_api import send_data_to_api
 
-# ---- Win32 低级鼠标钩子常量 ----
-WH_MOUSE_LL = 14
-HC_ACTION = 0
-WM_RBUTTONDOWN = 0x0204
-WM_RBUTTONUP = 0x0205
-WM_CONTEXTMENU = 0x007B
 
-_WIN32_HOOKPROC = ctypes.WINFUNCTYPE(
-    ctypes.c_longlong, ctypes.c_int,
-    ctypes.c_ulonglong, ctypes.c_longlong,
-)
+class PickRightClickBlocker(QObject):
+    right_cancel_requested = Signal()
+
+    def eventFilter(self, obj, event):
+        if event.type() in (
+            QEvent.MouseButtonPress,
+            QEvent.MouseButtonRelease,
+            QEvent.MouseButtonDblClick,
+        ):
+            if event.button() == Qt.RightButton:
+                self.right_cancel_requested.emit()
+                event.accept()
+                return True
+
+        if event.type() == QEvent.ContextMenu:
+            self.right_cancel_requested.emit()
+            event.accept()
+            return True
+
+        return False
 
 
 class Mywindow(QMainWindow):
@@ -65,7 +73,7 @@ class Mywindow(QMainWindow):
         toolbar.setStyleSheet("QToolBar { border: none; padding: 6px 8px; spacing: 6px; background: transparent; }")
 
         self.pushButton_procs = QPushButton("添加进程")
-        self.btn_crosshair = QPushButton("拾取窗口")
+        self.btn_crosshair = PickButton("拾取窗口")
         self.btn_crosshair.setToolTip("按住后拖动到目标窗口上松开，自动添加监控")
         self.btn_crosshair.setProperty("crosshair", True)
 
@@ -114,16 +122,12 @@ class Mywindow(QMainWindow):
         self.token = None
         self.username = None
         self._is_closing = False
-        self._crosshair_active = False
-        self._click_pick_mode = False
-        self._press_time = 0
-        self._pick_timer = None
-        self._prev_lbutton_pressed = False
-        self._prev_rbutton_pressed = False
-        self._hook = None
-        self._hook_proc_ref = None
+        self._overlay = None
         self._settings = Settings()
-        self._setup_hook_signatures()
+        self._right_click_blocker = PickRightClickBlocker(self)
+        self._right_click_blocker.right_cancel_requested.connect(
+            self._request_pick_cancel_by_right
+        )
 
         # ---- 组装子模块 ----
         self.table_manager = AppTableManager(self.tableWidget, self, self._settings)
@@ -143,7 +147,7 @@ class Mywindow(QMainWindow):
 
         # ---- 信号连接 ----
         self.pushButton_procs.clicked.connect(self.open_add_app_dialog)
-        self.btn_crosshair.pressed.connect(self._on_crosshair_pressed)
+        self.btn_crosshair.pick_requested.connect(self.start_pick_window)
         self.settings_button.clicked.connect(self.open_settings_dialog)
         self.login_action.triggered.connect(self.open_login_dialog)
         self.logout_action.triggered.connect(self._logout)
@@ -233,153 +237,39 @@ class Mywindow(QMainWindow):
         self._refresh_table()
         self._refresh_monitor_list()
 
-    def _on_crosshair_pressed(self):
-        self._press_time = time.monotonic()
-        self._crosshair_active = True
-        self.grabMouse()
-        QApplication.setOverrideCursor(Qt.CrossCursor)
-        self.setFocus()
-        self.statusBar().showMessage("短点击：点击目标窗口添加 | 长按拖动：拖到目标窗口松开 | 右键或 Esc 取消")
+    def start_pick_window(self):
+        QApplication.instance().installEventFilter(self._right_click_blocker)
 
-    def _cancel_crosshair(self):
-        self._crosshair_active = False
-        self._click_pick_mode = False
-        if self._pick_timer:
-            self._pick_timer.stop()
-            self._pick_timer = None
-        self.releaseMouse()
-        QApplication.restoreOverrideCursor()
-        self._restore_table_context_menu()
+        self._pick_overlay = PickOverlay()
+        self._pick_overlay.window_picked.connect(self._on_window_picked)
+        self._pick_overlay.cancelled.connect(self.on_pick_cancelled)
+        self._pick_overlay.show()
+        QApplication.processEvents()
+
+    def _remove_pick_right_click_blocker(self):
+        try:
+            QApplication.instance().removeEventFilter(self._right_click_blocker)
+        except Exception:
+            pass
+
+    def _request_pick_cancel_by_right(self):
+        if self._pick_overlay is not None:
+            try:
+                self._pick_overlay.request_cancel_by_right_button()
+            except Exception:
+                pass
+
+    def on_pick_cancelled(self):
+        self._remove_pick_right_click_blocker()
         self.statusBar().showMessage("已取消拾取", 2000)
 
-    def _disable_table_context_menu(self):
-        self._saved_context_policy = self.tableWidget.contextMenuPolicy()
-        self.tableWidget.setContextMenuPolicy(Qt.NoContextMenu)
-        self._install_mouse_hook()
+    def _on_window_picked(self, hwnd):
+        self._remove_pick_right_click_blocker()
+        self.raise_()
+        self.activateWindow()
+        self._pick_hwnd(hwnd)
 
-    def _restore_table_context_menu(self):
-        self._remove_mouse_hook()
-        if hasattr(self, '_saved_context_policy'):
-            self.tableWidget.setContextMenuPolicy(self._saved_context_policy)
-            del self._saved_context_policy
-
-    def _setup_hook_signatures(self):
-        ctypes.windll.user32.SetWindowsHookExW.argtypes = [
-            ctypes.c_int, _WIN32_HOOKPROC, ctypes.c_void_p, ctypes.c_ulong,
-        ]
-        ctypes.windll.user32.SetWindowsHookExW.restype = ctypes.c_void_p
-        ctypes.windll.user32.UnhookWindowsHookEx.argtypes = [ctypes.c_void_p]
-        ctypes.windll.user32.UnhookWindowsHookEx.restype = ctypes.c_long
-        ctypes.windll.user32.CallNextHookEx.argtypes = [
-            ctypes.c_void_p, ctypes.c_int,
-            ctypes.c_ulonglong, ctypes.c_longlong,
-        ]
-        ctypes.windll.user32.CallNextHookEx.restype = ctypes.c_longlong
-        ctypes.windll.kernel32.GetModuleHandleW.argtypes = [ctypes.c_wchar_p]
-        ctypes.windll.kernel32.GetModuleHandleW.restype = ctypes.c_void_p
-
-    def _install_mouse_hook(self):
-        python_dll = f"python{sys.version_info.major}{sys.version_info.minor}.dll"
-        hMod = ctypes.windll.kernel32.GetModuleHandleW(python_dll)
-        self._hook_proc_ref = _WIN32_HOOKPROC(self._mouse_hook_proc)
-        self._hook = ctypes.windll.user32.SetWindowsHookExW(
-            WH_MOUSE_LL, self._hook_proc_ref, hMod, 0,
-        )
-
-    def _remove_mouse_hook(self):
-        if self._hook:
-            ctypes.windll.user32.UnhookWindowsHookEx(self._hook)
-            self._hook = None
-        self._hook_proc_ref = None
-
-    def _mouse_hook_proc(self, nCode, wParam, lParam):
-        if nCode == HC_ACTION and self._click_pick_mode:
-            if wParam in (WM_RBUTTONDOWN, WM_RBUTTONUP, WM_CONTEXTMENU):
-                if wParam == WM_RBUTTONDOWN:
-                    self._cancel_crosshair()
-                return 1
-        return ctypes.windll.user32.CallNextHookEx(
-            self._hook, nCode, wParam, lParam
-        )
-
-    def mousePressEvent(self, event):
-        if (self._crosshair_active or self._click_pick_mode) and event.button() == Qt.RightButton:
-            self._cancel_crosshair()
-            return
-        if self._click_pick_mode:
-            return
-        super().mousePressEvent(event)
-
-    def mouseReleaseEvent(self, event: QMouseEvent):
-        if self._crosshair_active:
-            elapsed = time.monotonic() - self._press_time
-            if elapsed < 0.3:
-                self._crosshair_active = False
-                self._disable_table_context_menu()
-                self.statusBar().showMessage("点击目标窗口添加 | 右键或 Esc 取消")
-                self._click_pick_mode = True
-                self._prev_lbutton_pressed = True
-                self._prev_rbutton_pressed = False
-                self._pick_timer = QTimer()
-                self._pick_timer.timeout.connect(self._check_click_pick)
-                self._pick_timer.start(30)
-                return
-            else:
-                self._crosshair_active = False
-                self.releaseMouse()
-                QApplication.restoreOverrideCursor()
-                self.statusBar().clearMessage()
-                self._pick_window_at(event.globalPosition().toPoint())
-                return
-        if self._click_pick_mode:
-            return
-        super().mouseReleaseEvent(event)
-
-    def _check_click_pick(self):
-        if not self._click_pick_mode:
-            return
-
-        rbutton = bool(win32api.GetAsyncKeyState(win32con.VK_RBUTTON) & 0x8000)
-        if rbutton and not self._prev_rbutton_pressed:
-            self._cancel_crosshair()
-            return
-        self._prev_rbutton_pressed = rbutton
-
-        lbutton = bool(win32api.GetAsyncKeyState(win32con.VK_LBUTTON) & 0x8000)
-        if not lbutton and self._prev_lbutton_pressed:
-            pos = win32gui.GetCursorPos()
-            screen_pos = QPoint(pos[0], pos[1])
-            if self.rect().contains(self.mapFromGlobal(screen_pos)):
-                self._prev_lbutton_pressed = lbutton
-                return
-            self._pick_timer.stop()
-            self._pick_timer = None
-            self._click_pick_mode = False
-            self._prev_lbutton_pressed = False
-            self._prev_rbutton_pressed = False
-            self.releaseMouse()
-            QApplication.restoreOverrideCursor()
-            self._restore_table_context_menu()
-            self.statusBar().clearMessage()
-            self._pick_window_at(screen_pos)
-        self._prev_lbutton_pressed = lbutton
-
-    def keyPressEvent(self, event):
-        if (self._crosshair_active or self._click_pick_mode) and event.key() == Qt.Key_Escape:
-            self._cancel_crosshair()
-            return
-        super().keyPressEvent(event)
-
-    def _pick_window_at(self, screen_pos):
-        hwnd = win32gui.WindowFromPoint((screen_pos.x(), screen_pos.y()))
-        if not hwnd:
-            self.statusBar().showMessage("未找到窗口", 3000)
-            return
-
-        root = win32gui.GetAncestor(hwnd, win32con.GA_ROOT)
-        if root:
-            hwnd = root
-
+    def _pick_hwnd(self, hwnd):
         try:
             _, pid = win32process.GetWindowThreadProcessId(hwnd)
         except Exception:
