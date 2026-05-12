@@ -5,8 +5,8 @@ import psutil
 import win32gui
 import win32con
 import win32process
-from PySide6.QtCore import Qt, QTimer, QSize, QObject, QEvent, Signal
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtCore import Qt, QTimer, QSize, QObject, QEvent, Signal, QByteArray
+from PySide6.QtGui import QAction, QIcon, QImage, QColor, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QDialog, QPushButton, QLabel,
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QSystemTrayIcon,
@@ -21,11 +21,23 @@ from settings import Settings
 from settings_dialog import CloseAskDialog, SettingsDialog
 from size_grip import StyledSizeGrip
 from pick_overlay import PickOverlay, PickButton
+from theme import get_system_theme
 
 from dialogs import AppDetailDialog, ClosingDialog, AddAppDialog
 from login_dialog import LoginDialog
 from sync_service import get_and_prepare_sync_data, mark_activities_as_synced
 from client_api import send_data_to_api
+
+
+def _themed_icon(svg_path, color):
+    with open(svg_path, "r", encoding="utf-8") as f:
+        svg = f.read()
+    svg = svg.replace("currentColor", color)
+    data = QByteArray(svg.encode("utf-8"))
+    image = QImage()
+    if image.loadFromData(data, "SVG"):
+        return QIcon(QPixmap.fromImage(image))
+    return QIcon()
 
 
 class PickRightClickBlocker(QObject):
@@ -72,10 +84,18 @@ class Mywindow(QMainWindow):
         toolbar.setIconSize(QSize(18, 18))
         toolbar.setStyleSheet("QToolBar { border: none; padding: 6px 8px; spacing: 6px; background: transparent; }")
 
+        if getattr(sys, 'frozen', False):
+            self._base = sys._MEIPASS
+        else:
+            self._base = os.path.dirname(os.path.abspath(__file__))
+        base = self._base
+
         self.pushButton_procs = QPushButton("添加进程")
         self.btn_crosshair = PickButton("拾取窗口")
         self.btn_crosshair.setToolTip("按住后拖动到目标窗口上松开，自动添加监控")
         self.btn_crosshair.setProperty("crosshair", True)
+        crosshair_path = os.path.join(base, "icons", "crosshair.svg")
+        self.btn_crosshair.setIcon(_themed_icon(crosshair_path, "#16a34a"))
 
         toolbar.addWidget(self.pushButton_procs)
         toolbar.addWidget(self.btn_crosshair)
@@ -95,12 +115,8 @@ class Mywindow(QMainWindow):
 
         self.settings_button = QPushButton()
         self.settings_button.setToolTip("设置")
-        if getattr(sys, 'frozen', False):
-            base = sys._MEIPASS
-        else:
-            base = os.path.dirname(os.path.abspath(__file__))
         gear_path = os.path.join(base, "icons", "gear.svg")
-        self.settings_button.setIcon(QIcon(gear_path))
+        self.settings_button.setIcon(_themed_icon(gear_path, "#475569"))
         self.settings_button.setProperty("settings", True)
         self.settings_button.setFixedSize(44, 44)
         self.settings_button.setIconSize(QSize(22, 22))
@@ -128,6 +144,7 @@ class Mywindow(QMainWindow):
         self._right_click_blocker.right_cancel_requested.connect(
             self._request_pick_cancel_by_right
         )
+        self._refresh_toolbar_icons()
 
         # ---- 组装子模块 ----
         self.table_manager = AppTableManager(self.tableWidget, self, self._settings)
@@ -328,6 +345,25 @@ class Mywindow(QMainWindow):
         self.logout_action.setVisible(False)
         self.statusBar().showMessage("已退出登录", 3000)
         print("[MainWindow] 退出登录完成, UI 已恢复")
+
+    def _refresh_toolbar_icons(self):
+        mode = self._settings.get("themeMode", "system")
+        if mode == "dark":
+            is_dark = True
+        elif mode == "system":
+            is_dark = get_system_theme() == "dark"
+        else:
+            is_dark = False
+
+        crosshair_color = "#6ee7b7" if is_dark else "#16a34a"
+        gear_color = "#94a3b8" if is_dark else "#475569"
+
+        self.btn_crosshair.setIcon(
+            _themed_icon(os.path.join(self._base, "icons", "crosshair.svg"), crosshair_color)
+        )
+        self.settings_button.setIcon(
+            _themed_icon(os.path.join(self._base, "icons", "gear.svg"), gear_color)
+        )
 
     def open_settings_dialog(self):
         SettingsDialog(self).exec()

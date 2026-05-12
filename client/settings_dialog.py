@@ -202,4 +202,7 @@ class SettingsDialog(QDialog):
         else:
             apply_theme("system")
 
+        if hasattr(self.parent(), "_refresh_toolbar_icons"):
+            self.parent()._refresh_toolbar_icons()
+
         self.accept()
