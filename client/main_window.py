@@ -28,6 +28,7 @@ from dialogs import AppDetailDialog, ClosingDialog, AddAppDialog
 from login_dialog import LoginDialog
 from sync_service import get_and_prepare_sync_data, mark_activities_as_synced
 from client_api import send_data_to_api
+from services import retry_failed_sessions, get_failed_queue_count
 
 
 def _themed_icon(svg_path, color):
@@ -213,9 +214,17 @@ class Mywindow(QMainWindow):
 
         self.monitor_controller = MonitorController(self)
         self.monitor_controller.status_updated.connect(self.table_manager.update_status)
+        self.monitor_controller.session_finished.connect(self._refresh_table)
+        self.monitor_controller.session_save_failed.connect(self._on_session_save_failed)
 
         self.sync_controller = SyncController(token_provider=lambda: self.token, parent=self)
         self.sync_controller.status_updated.connect(self.update_status_bar)
+
+        # 失败会话重试定时器（每 30 秒检查一次）
+        self._retry_timer = QTimer(self)
+        self._retry_timer.setInterval(30_000)
+        self._retry_timer.timeout.connect(self._retry_failed_sessions)
+        self._retry_timer.start()
 
         # ---- 系统托盘 ----
         self._setup_tray_icon()
@@ -493,6 +502,23 @@ class Mywindow(QMainWindow):
         if data and send_data_to_api(data, "/sync/sessions/", self.token):
             mark_activities_as_synced(marks)
             self.update_status_bar("同步成功")
+
+    def _on_session_save_failed(self, exe_name: str, error: str):
+        count = get_failed_queue_count()
+        self.statusBar().showMessage(
+            f"⚠ 保存失败: {exe_name} — {error}（队列中 {count} 条待重试）", 8000
+        )
+
+    def _retry_failed_sessions(self):
+        success, remaining = retry_failed_sessions()
+        if success > 0:
+            self._refresh_table()
+            self.statusBar().showMessage(
+                f"成功恢复 {success} 条会话记录，剩余 {remaining} 条待重试", 5000
+            )
+        elif remaining > 0:
+            # 静默重试，不打扰用户，除非全部成功
+            pass
 
     def update_status_bar(self, msg: str):
         self.statusBar().showMessage(msg, 5000)

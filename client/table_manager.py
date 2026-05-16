@@ -178,11 +178,11 @@ class AppTableManager(QObject):
 
             # 状态列：根据 is_watched / is_path_exist 决定颜色
             if not app.is_path_exist:
-                status_color = "#f59e0b"
+                status_color = "#ef4444"
                 status_text = "路径不存在"
                 status_value = -2
             elif not app.is_watched:
-                status_color = "#e2e8f0"
+                status_color = "#334155"
                 status_text = "未监视"
                 status_value = -1
             else:
@@ -245,7 +245,7 @@ class AppTableManager(QObject):
             # 路径不存在：保持黄色，跳过
             if is_path_exist is False:
                 self.table.setCellWidget(
-                    row, 0, self._create_status_label("#f59e0b", "路径不存在")
+                    row, 0, self._create_status_label("#ef4444", "路径不存在")
                 )
                 continue
 
@@ -255,7 +255,7 @@ class AppTableManager(QObject):
                 if status_item:
                     status_item.setData(Qt.UserRole, -1)
                 self.table.setCellWidget(
-                    row, 0, self._create_status_label("#e2e8f0", "未监视")
+                    row, 0, self._create_status_label("#334155", "未监视")
                 )
                 item_cur_focus = SortableTableWidgetItem("-")
                 item_cur_focus.setData(Qt.UserRole, _NOT_RUNNING)
@@ -352,7 +352,7 @@ class AppTableManager(QObject):
                 if status_item:
                     status_item.setData(Qt.UserRole, -1)
                 self.table.setCellWidget(
-                    row, 0, self._create_status_label("#e2e8f0", "未监视")
+                    row, 0, self._create_status_label("#334155", "未监视")
                 )
                 item_cur_focus = SortableTableWidgetItem("-")
                 item_cur_focus.setData(Qt.UserRole, _NOT_RUNNING)

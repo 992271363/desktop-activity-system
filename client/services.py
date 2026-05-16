@@ -1,4 +1,5 @@
 import os
+import json
 import psutil
 import datetime
 import time
@@ -7,6 +8,104 @@ import win32process
 from PySide6.QtCore import QObject, Signal, QMutex, QMutexLocker
 from typing import List, Dict, TypedDict
 from path_utils import normalize_exe_path
+
+# --- 失败队列文件路径 ---
+_FAILED_QUEUE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+os.makedirs(_FAILED_QUEUE_DIR, exist_ok=True)
+_FAILED_QUEUE_PATH = os.path.join(_FAILED_QUEUE_DIR, "failed_sessions.json")
+_MAX_RETRIES = 10
+
+
+def _load_failed_queue() -> List[dict]:
+    if not os.path.exists(_FAILED_QUEUE_PATH):
+        return []
+    try:
+        with open(_FAILED_QUEUE_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def _save_failed_queue(queue: List[dict]) -> None:
+    try:
+        with open(_FAILED_QUEUE_PATH, "w", encoding="utf-8") as f:
+            json.dump(queue, f, ensure_ascii=False, indent=2, default=str)
+    except Exception as e:
+        print(f"[Failed Queue] 写入队列文件失败: {e}")
+
+
+def _enqueue_failed_session(
+    exe_path: str,
+    exe_name: str,
+    start_time: datetime.datetime,
+    end_time: datetime.datetime,
+    focus_details: dict,
+    error: str,
+) -> None:
+    queue = _load_failed_queue()
+    queue.append({
+        "executable_path": exe_path,
+        "executable_name": exe_name,
+        "start_time": start_time.isoformat(),
+        "end_time": end_time.isoformat(),
+        "focus_details": focus_details,
+        "retry_count": 0,
+        "last_error": str(error),
+        "failed_at": datetime.datetime.now().isoformat(),
+    })
+    _save_failed_queue(queue)
+    print(f"[Failed Queue] 会话已入队，当前队列长度: {len(queue)}")
+
+
+def retry_failed_sessions() -> tuple[int, int]:
+    """
+    在主线程中调用，重试队列中的失败会话。
+    返回 (成功数, 剩余数)。
+    """
+    from local_database import SessionLocal
+    from tracking_service import record_process_session
+
+    queue = _load_failed_queue()
+    if not queue:
+        return 0, 0
+
+    success_count = 0
+    remaining = []
+
+    for item in queue:
+        if item.get("retry_count", 0) >= _MAX_RETRIES:
+            print(f"[Failed Queue] 跳过已达最大重试次数的会话: {item['executable_name']}")
+            remaining.append(item)
+            continue
+
+        item["retry_count"] = item.get("retry_count", 0) + 1
+
+        try:
+            db = SessionLocal()
+            record_process_session(
+                db=db,
+                executable_path=item["executable_path"],
+                executable_name=item["executable_name"],
+                start_time=datetime.datetime.fromisoformat(item["start_time"]),
+                end_time=datetime.datetime.fromisoformat(item["end_time"]),
+                focus_details=item["focus_details"],
+            )
+            db.close()
+            success_count += 1
+            print(f"[Failed Queue] 重试成功: {item['executable_name']}")
+        except Exception as e:
+            item["last_error"] = str(e)
+            item["failed_at"] = datetime.datetime.now().isoformat()
+            remaining.append(item)
+            print(f"[Failed Queue] 重试失败 ({item['retry_count']}/{_MAX_RETRIES}): {item['executable_name']} - {e}")
+
+    _save_failed_queue(remaining)
+    return success_count, len(remaining)
+
+
+def get_failed_queue_count() -> int:
+    return len(_load_failed_queue())
+
 
 # --- 基础类型 ---
 class ProcessInfo(TypedDict):
@@ -47,6 +146,7 @@ class ActiveSession:
 class GlobalMonitorWorker(QObject):
     status_updated = Signal(dict)
     session_finished = Signal(str, int)
+    session_save_failed = Signal(str, str)
     finished = Signal()
 
     def __init__(self, watched_apps_info: List[tuple]):
@@ -175,7 +275,18 @@ class GlobalMonitorWorker(QObject):
                                    focus_details=session.focus_details)
             self.session_finished.emit(session.exe_name, int((end_time - session.start_time).total_seconds()))
         except Exception as e:
-            print(f"[DB Save Error] {e}")
+            # 不再静默吞掉：写入文件队列，并通知 UI
+            db.rollback()
+            _enqueue_failed_session(
+                session.exe_path,
+                session.exe_name,
+                session.start_time,
+                end_time,
+                session.focus_details,
+                str(e),
+            )
+            self.session_save_failed.emit(session.exe_name, str(e))
+            print(f"[DB Save Error] {e} — 已入队稍后重试")
         finally:
             db.close()
 

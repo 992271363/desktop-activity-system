@@ -6,6 +6,8 @@ from typing import List
 
 class MonitorController(QObject):
     status_updated = Signal(dict)
+    session_finished = Signal(str, int)
+    session_save_failed = Signal(str, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -21,6 +23,8 @@ class MonitorController(QObject):
         self._thread.started.connect(self._worker.run)
         self._worker.finished.connect(self._thread.quit)
         self._worker.status_updated.connect(self.status_updated)
+        self._worker.session_finished.connect(self.session_finished)
+        self._worker.session_save_failed.connect(self.session_save_failed)
         self._thread.finished.connect(self._on_thread_finished)
         self._thread.start()
 
