@@ -1,13 +1,17 @@
+import os
+import shutil
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QCheckBox, QFormLayout, QSpinBox, QGroupBox, QDialogButtonBox,
-    QComboBox, QRadioButton, QButtonGroup
+    QComboBox, QRadioButton, QButtonGroup, QFileDialog, QMessageBox,
+    QLineEdit
 )
 
 from settings import Settings
 import autostart
 from theme import apply_theme
+from data_dir import get_data_dir, set_data_dir
 
 
 class AlwaysDownComboBox(QComboBox):
@@ -167,6 +171,18 @@ class SettingsDialog(QDialog):
         data_form = QFormLayout(data_group)
         data_form.setContentsMargins(10, 16, 10, 8)
 
+        # 当前数据目录
+        path_layout = QHBoxLayout()
+        self.path_edit = QLineEdit(get_data_dir())
+        self.path_edit.setReadOnly(True)
+        path_layout.addWidget(self.path_edit, stretch=1)
+
+        self.btn_change_dir = QPushButton("更改...")
+        self.btn_change_dir.setFixedWidth(70)
+        self.btn_change_dir.clicked.connect(self._on_change_data_dir)
+        path_layout.addWidget(self.btn_change_dir)
+        data_form.addRow("存储位置:", path_layout)
+
         self.btn_clear_data = QPushButton("清除本地数据")
         self.btn_clear_data.setEnabled(False)
         self.btn_clear_data.setToolTip("待实现")
@@ -181,6 +197,63 @@ class SettingsDialog(QDialog):
         btn_box.accepted.connect(self._on_accept)
         btn_box.rejected.connect(self.reject)
         layout.addWidget(btn_box)
+
+    def _on_change_data_dir(self):
+        current = get_data_dir()
+        new_path = QFileDialog.getExistingDirectory(
+            self, "选择新的数据存储目录", current
+        )
+        if not new_path:
+            return
+        new_path = os.path.normpath(os.path.abspath(new_path))
+        if new_path == current:
+            return
+
+        # 检查目标目录是否已有数据文件
+        has_existing = any(
+            os.path.exists(os.path.join(new_path, f))
+            for f in ["local_client.db", "settings.json", "failed_sessions.json"]
+        )
+        if has_existing:
+            reply = QMessageBox.question(
+                self,
+                "目录不为空",
+                "目标目录已存在数据文件，是否覆盖？\n\n"
+                "选择「是」将覆盖现有文件。\n"
+                "选择「否」则仅更改路径，不迁移数据。",
+                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+            )
+            if reply == QMessageBox.Cancel:
+                return
+            migrate = (reply == QMessageBox.Yes)
+        else:
+            migrate = QMessageBox.question(
+                self,
+                "迁移数据",
+                f"是否将现有数据迁移到新目录？\n\n"
+                f"从：{current}\n"
+                f"到：{new_path}",
+                QMessageBox.Yes | QMessageBox.No,
+            ) == QMessageBox.Yes
+
+        if migrate:
+            try:
+                os.makedirs(new_path, exist_ok=True)
+                for filename in ["local_client.db", "settings.json", "failed_sessions.json"]:
+                    src = os.path.join(current, filename)
+                    if os.path.exists(src):
+                        shutil.copy2(src, new_path)
+            except Exception as e:
+                QMessageBox.critical(self, "迁移失败", f"无法复制数据文件：\n{e}")
+                return
+
+        set_data_dir(new_path)
+        self.path_edit.setText(new_path)
+        QMessageBox.information(
+            self,
+            "需要重启",
+            "数据存储位置已更改，请重启应用以使用新目录。",
+        )
 
     def _on_accept(self):
         close_value = self.combo_close_action.currentData()

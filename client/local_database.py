@@ -2,9 +2,9 @@ import os
 from sqlalchemy import create_engine, text, event
 from sqlalchemy.orm import sessionmaker
 from local_models import Base
+from data_dir import get_data_dir
 
-basedir = os.path.abspath(os.path.dirname(__file__))
-data_dir = os.path.join(basedir, "data")
+data_dir = get_data_dir()
 os.makedirs(data_dir, exist_ok=True)
 db_path = os.path.join(data_dir, "local_client.db")
 

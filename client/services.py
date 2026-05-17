@@ -8,9 +8,10 @@ import win32process
 from PySide6.QtCore import QObject, Signal, QMutex, QMutexLocker
 from typing import List, Dict, TypedDict
 from path_utils import normalize_exe_path
+from data_dir import get_data_dir
 
 # --- 失败队列文件路径 ---
-_FAILED_QUEUE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+_FAILED_QUEUE_DIR = get_data_dir()
 os.makedirs(_FAILED_QUEUE_DIR, exist_ok=True)
 _FAILED_QUEUE_PATH = os.path.join(_FAILED_QUEUE_DIR, "failed_sessions.json")
 _MAX_RETRIES = 10

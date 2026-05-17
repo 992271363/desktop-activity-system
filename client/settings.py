@@ -2,6 +2,8 @@ import json
 import os
 import sys
 
+from data_dir import get_data_dir
+
 
 class Settings:
     _instance = None
@@ -15,11 +17,7 @@ class Settings:
 
     @staticmethod
     def _get_file_path():
-        if getattr(sys, 'frozen', False):
-            base_dir = os.path.dirname(sys.executable)
-        else:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-        return os.path.join(base_dir, "settings.json")
+        return os.path.join(get_data_dir(), "settings.json")
 
     def _load(self):
         path = self._get_file_path()

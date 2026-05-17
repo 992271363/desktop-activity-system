@@ -2,7 +2,7 @@ import sys  # 提供命令行参数与退出状态码
 import os  # 提供路径拼接等系统相关功能
 import tempfile  # 获取系统临时目录，用于存放锁文件
 
-from PySide6.QtWidgets import QApplication  # Qt 应用入口类
+from PySide6.QtWidgets import QApplication, QDialog  # Qt 应用入口类
 from PySide6.QtCore import QLockFile  # Qt 提供的跨平台文件锁工具
 
 from main_window import Mywindow  # 自定义主窗口
@@ -10,6 +10,8 @@ from local_database import create_db_and_tables  # 数据库初始化工具
 from settings import Settings  # 配置读取工具
 from theme import apply_theme  # 主题应用工具
 import autostart  # 开机自启动相关工具
+from data_dir import is_data_dir_configured
+from first_run_wizard import FirstRunWizard
 
 
 # ============================================================
@@ -98,61 +100,49 @@ if __name__ == "__main__":
         sys.exit(0)
 
     # ========================================================
-    # 第二步：初始化数据库
-    #
-    # 如果数据库或表不存在，则创建。
-    # 因为前面已经做过唯一性检测，所以不会有多个实例同时初始化数据库。
+    # 第二步：创建 Qt 应用实例（必须先有 QApplication 才能弹对话框）
+    # ========================================================
+    app = QApplication(sys.argv)
+
+    # ========================================================
+    # 第三步：首次运行引导（选择数据存储位置）
+    # ========================================================
+    if not is_data_dir_configured():
+        print("首次运行，弹出数据目录配置向导...")
+        wizard = FirstRunWizard()
+        if wizard.exec() != QDialog.Accepted:
+            print("用户取消了首次配置，退出程序。")
+            sys.exit(0)
+        print(f"用户选择的数据目录: {wizard.selected_path()}")
+
+    # ========================================================
+    # 第四步：初始化数据库
     # ========================================================
     print("正在初始化数据库...")
     create_db_and_tables()
     print("数据库初始化完成。")
 
     # ========================================================
-    # 第三步：修复开机自启动路径
-    #
-    # 如果当前系统支持开机自启动，则检查并修复启动路径。
+    # 第五步：修复开机自启动路径
     # ========================================================
     if autostart.is_available():
         autostart.fix_path()
 
-    # ========================================================
-    # 第四步：创建 Qt 应用实例
-    #
-    # sys.argv 用于接收命令行参数。
-    # QApplication 是所有 Qt Widgets 程序的入口。
-    # ========================================================
-    app = QApplication(sys.argv)
-
     # 设置 Qt 内置 Fusion 风格
-    #
-    # Fusion 是 Qt 提供的跨平台统一风格，
-    # 可以让 Windows / macOS / Linux 上的界面观感更一致。
     app.setStyle("Fusion")
 
     # ========================================================
-    # 第五步：应用主题
-    #
-    # 从 Settings 中读取 themeMode。
-    #
-    # 如果用户没有设置主题，则默认使用 "system"，
-    # 也就是跟随系统主题。
+    # 第六步：应用主题
     # ========================================================
     apply_theme(Settings().get("themeMode", "system"))
 
     # ========================================================
-    # 第六步：创建并显示主窗口
+    # 第七步：创建并显示主窗口
     # ========================================================
     window = Mywindow()
     window.show()
 
     # ========================================================
-    # 第七步：进入 Qt 事件循环
-    #
-    # app.exec() 会阻塞在这里，直到用户关闭程序。
-    # sys.exit() 会把 Qt 程序退出码返回给系统。
-    #
-    # 注意：
-    # single_instance_lock 变量必须一直存在到程序结束。
-    # 只要这个变量还在，程序唯一性锁就不会被释放。
+    # 第八步：进入 Qt 事件循环
     # ========================================================
     sys.exit(app.exec())
