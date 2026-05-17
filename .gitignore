@@ -243,3 +243,6 @@ dist_test/
 .claude/
 
 开发日志.md
+
+#settings
+client/settings.json

@@ -4,14 +4,15 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QFileDialog, QMessageBox
 )
-from data_dir import set_data_dir, _default_appdata
+from data_dir import _default_appdata
+from settings import Settings
 
 
 class FirstRunWizard(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("欢迎使用 desktopActivitySystem")
-        self.setFixedSize(520, 220)
+        self.setFixedSize(520, 240)
         self.setWindowFlags(Qt.Dialog | Qt.CustomizeWindowHint | Qt.WindowTitleHint)
 
         self._selected_path = _default_appdata()
@@ -26,7 +27,7 @@ class FirstRunWizard(QDialog):
 
         desc = QLabel(
             "应用需要创建一个目录来存放本地数据库、设置和未同步数据。\n"
-            "你可以使用默认路径，也可以选择其他位置。"
+            "你可以使用默认路径，也可以选择放置于根目录或其他位置。"
         )
         desc.setStyleSheet("color: #64748b; font-size: 12px;")
         desc.setWordWrap(True)
@@ -46,6 +47,19 @@ class FirstRunWizard(QDialog):
 
         # 按钮行
         btn_layout = QHBoxLayout()
+
+        default_btn = QPushButton("默认")
+        default_btn.setFixedHeight(34)
+        default_btn.setFixedWidth(70)
+        default_btn.clicked.connect(self._set_default_dir)
+        btn_layout.addWidget(default_btn)
+
+        root_btn = QPushButton("根目录")
+        root_btn.setFixedHeight(34)
+        root_btn.setFixedWidth(70)
+        root_btn.clicked.connect(self._set_root_dir)
+        btn_layout.addWidget(root_btn)
+
         btn_layout.addStretch()
 
         self.confirm_btn = QPushButton("开始使用")
@@ -73,6 +87,14 @@ class FirstRunWizard(QDialog):
             self._selected_path = path
             self.path_edit.setText(path)
 
+    def _set_root_dir(self):
+        self._selected_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+        self.path_edit.setText(self._selected_path)
+
+    def _set_default_dir(self):
+        self._selected_path = _default_appdata()
+        self.path_edit.setText(self._selected_path)
+
     def _confirm(self):
         path = self._selected_path
         try:
@@ -90,7 +112,7 @@ class FirstRunWizard(QDialog):
             )
             return
 
-        set_data_dir(path)
+        Settings().set("dataDirectory", path)
         self.accept()
 
     def selected_path(self) -> str:

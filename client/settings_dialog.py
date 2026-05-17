@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 from settings import Settings
 import autostart
 from theme import apply_theme
-from data_dir import get_data_dir, set_data_dir
+from data_dir import get_data_dir
 
 
 class AlwaysDownComboBox(QComboBox):
@@ -212,7 +212,7 @@ class SettingsDialog(QDialog):
         # 检查目标目录是否已有数据文件
         has_existing = any(
             os.path.exists(os.path.join(new_path, f))
-            for f in ["local_client.db", "settings.json", "failed_sessions.json"]
+            for f in ["local_client.db", "failed_sessions.json"]
         )
         if has_existing:
             reply = QMessageBox.question(
@@ -239,7 +239,7 @@ class SettingsDialog(QDialog):
         if migrate:
             try:
                 os.makedirs(new_path, exist_ok=True)
-                for filename in ["local_client.db", "settings.json", "failed_sessions.json"]:
+                for filename in ["local_client.db", "failed_sessions.json"]:
                     src = os.path.join(current, filename)
                     if os.path.exists(src):
                         shutil.copy2(src, new_path)
@@ -247,7 +247,7 @@ class SettingsDialog(QDialog):
                 QMessageBox.critical(self, "迁移失败", f"无法复制数据文件：\n{e}")
                 return
 
-        set_data_dir(new_path)
+        Settings().set("dataDirectory", new_path)
         self.path_edit.setText(new_path)
         QMessageBox.information(
             self,
