@@ -8,7 +8,7 @@ import win32con
 import win32process
 from typing import Optional
 from PySide6.QtCore import Qt, QTimer, QSize, QObject, QEvent, Signal, QByteArray, QPoint, QMimeData
-from PySide6.QtGui import QAction, QIcon, QImage, QColor, QPainter, QPixmap, QDrag, QCursor
+from PySide6.QtGui import QAction, QKeySequence, QIcon, QImage, QColor, QPainter, QPixmap, QDrag, QCursor
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QDialog, QPushButton, QLabel,
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, QSystemTrayIcon,
@@ -21,7 +21,8 @@ from ui.table import AppTableManager
 from core.controller import MonitorController
 from core.sync_controller import SyncController
 from util.config import Settings
-from ui.settings import CloseAskDialog, SettingsDialog
+from ui.settings import CloseAskDialog, SettingsDialog, ZoomDialog
+from ui.transfer import DataTransferDialog
 from ui.widgets import StyledSizeGrip, ChineseMenuLineEdit
 from ui.picker import PickOverlay, PickButton
 from ui.theme import get_system_theme
@@ -289,6 +290,51 @@ class Mywindow(QMainWindow):
         self.settings_button.setIconSize(QSize(27, 27))
 
         toolbar.addWidget(self.settings_button)
+
+        # ---- 菜单栏 ----
+        mb = self.menuBar()
+        fm = mb.addMenu("文件")
+        a = QAction("添加监控应用…", self)
+        a.setShortcut(QKeySequence("Ctrl+N"))
+        a.triggered.connect(self.open_add_app_dialog)
+        fm.addAction(a)
+        a = QAction("拾取窗口", self)
+        a.triggered.connect(self.start_pick_window)
+        fm.addAction(a)
+        fm.addSeparator()
+        a = QAction("退出", self)
+        a.setShortcut(QKeySequence("Ctrl+Q"))
+        a.triggered.connect(self.close)
+        fm.addAction(a)
+        vm = mb.addMenu("视图")
+        a = QAction("统计", self)
+        a.setShortcut(QKeySequence("Ctrl+T"))
+        a.triggered.connect(self.open_stats)
+        vm.addAction(a)
+        a = QAction("分组管理…", self)
+        a.triggered.connect(self._open_group_dialog)
+        vm.addAction(a)
+        a = QAction("调整缩放…", self)
+        a.triggered.connect(lambda: ZoomDialog(self, self).exec())
+        vm.addAction(a)
+        tm = mb.addMenu("工具")
+        a = QAction("暂停·恢复监控", self)
+        a.triggered.connect(self._toggle_monitor)
+        tm.addAction(a)
+        tm.addSeparator()
+        a = QAction("设置…", self)
+        a.triggered.connect(self.open_settings_dialog)
+        tm.addAction(a)
+        a = QAction("数据转移…", self)
+        a.triggered.connect(lambda: DataTransferDialog(self).exec())
+        tm.addAction(a)
+        a = QAction("清除失败队列", self)
+        a.triggered.connect(self._on_clear_failed_queue)
+        tm.addAction(a)
+        hm = mb.addMenu("帮助")
+        a = QAction("关于", self)
+        a.triggered.connect(self._show_about)
+        hm.addAction(a)
 
         self.addToolBar(toolbar)
 
@@ -595,6 +641,24 @@ class Mywindow(QMainWindow):
         if AppRepository.get_all_groups() != groups_before:
             self._rebuild_group_buttons()
             self._refresh_table()
+
+    def _on_clear_failed_queue(self):
+        reply = QMessageBox.warning(
+            self, "清除失败队列",
+            "确定要清除所有失败队列数据吗？<br><br>这将删除所有因同步失败而暂存的数据。",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+        from db.io import clear_failed_queue
+        ok, msg = clear_failed_queue()
+        if ok:
+            QMessageBox.information(self, "已清除", msg)
+        else:
+            QMessageBox.critical(self, "清除失败", msg)
+
+    def _show_about(self):
+        QMessageBox.about(self, "关于 Kokoro Journey", "<h3>Kokoro Journey</h3><br><p>桌面活动统计系统</p>")
 
     def _refresh_table(self, skip_width_hint=False, preserve_sort=False):
         apps = AppRepository.get_all_apps(group_filter=self._current_group_id)

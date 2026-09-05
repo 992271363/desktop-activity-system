@@ -412,6 +412,23 @@ QProgressBar::chunk {
     border-radius: 3px;
 }
 
+/* ---- 菜单栏 ---- */
+QMenuBar {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e4e4e7;
+    padding: 2px;
+}
+
+QMenuBar::item:selected {
+    background: #e4e4e7;
+    border-radius: 4px;
+}
+
+QMenuBar::item:hover {
+    background: #f4f4f5;
+    border-radius: 4px;
+}
+
 /* ---- 工具栏 ---- */
 QToolBar {
     background-color: #ffffff;
@@ -1097,6 +1114,23 @@ QProgressBar {
 QProgressBar::chunk {
     background-color: #3b82f6;
     border-radius: 3px;
+}
+
+/* ---- 菜单栏 ---- */
+QMenuBar {
+    background-color: #1e293b;
+    border-bottom: 1px solid #334155;
+    padding: 2px;
+}
+
+QMenuBar::item:selected {
+    background: #334155;
+    border-radius: 4px;
+}
+
+QMenuBar::item:hover {
+    background: #334155;
+    border-radius: 4px;
 }
 
 /* ---- 工具栏 ---- */
