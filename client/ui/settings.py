@@ -6,7 +6,8 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QCheckBox, QFormLayout, QSpinBox, QGroupBox, QDialogButtonBox,
     QRadioButton, QButtonGroup, QFileDialog, QMessageBox,
-    QLineEdit, QSizePolicy, QSlider, QStyle, QStyleOptionSlider
+    QLineEdit, QSizePolicy, QSlider, QStyle, QStyleOptionSlider,
+    QWidget, QScrollArea, QFrame
 )
 
 from util.config import Settings
@@ -211,6 +212,11 @@ class SettingsDialog(QDialog):
         layout.setContentsMargins(16, 14, 16, 10)
         layout.setSpacing(10)
 
+        content_widget = QWidget()
+        content_layout = QVBoxLayout(content_widget)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(10)
+
         # --- 关闭行为 ---
         close_group = QGroupBox("关闭行为")
         close_form = QFormLayout(close_group)
@@ -230,7 +236,7 @@ class SettingsDialog(QDialog):
             self.combo_close_action.setCurrentIndex(0)
 
         close_form.addRow("点击关闭按钮时:", self.combo_close_action)
-        layout.addWidget(close_group)
+        content_layout.addWidget(close_group)
 
         # --- 通用 ---
         general_group = QGroupBox("通用")
@@ -313,7 +319,7 @@ class SettingsDialog(QDialog):
         self.check_hide_on_pick.setToolTip("拾取窗口时临时隐藏主窗口，便于选取被主窗口挡住的窗口。")
         general_form.addRow(self.check_hide_on_pick)
 
-        layout.addWidget(general_group)
+        content_layout.addWidget(general_group)
 
         # --- 显示 ---
         display_group = QGroupBox("显示")
@@ -375,7 +381,7 @@ class SettingsDialog(QDialog):
         self.btn_zoom.clicked.connect(self._open_zoom_dialog)
         display_form.addRow(self.btn_zoom)
 
-        layout.addWidget(display_group)
+        content_layout.addWidget(display_group)
 
         # --- 数据 ---
         data_group = QGroupBox("数据")
@@ -411,7 +417,7 @@ class SettingsDialog(QDialog):
 
         data_form.addRow(btn_row)
 
-        layout.addWidget(data_group)
+        content_layout.addWidget(data_group)
 
         # --- 运行统计 ---
         stats_group = QGroupBox("运行统计")
@@ -426,14 +432,14 @@ class SettingsDialog(QDialog):
         self._label_total.setProperty("role", "muted")
         stats_layout.addWidget(self._label_total)
 
-        layout.addWidget(stats_group)
+        content_layout.addWidget(stats_group)
 
         self._runtime_timer = QTimer(self)
         self._runtime_timer.timeout.connect(self._update_runtime_display)
         self._runtime_timer.start(1000)
         self._update_runtime_display()
 
-        layout.addStretch()
+        content_layout.addStretch()
 
         # --- 底部按钮 ---
         btn_layout = QHBoxLayout()
@@ -458,6 +464,24 @@ class SettingsDialog(QDialog):
         self.btn_apply.setFixedWidth(80)
         self.btn_apply.clicked.connect(self._on_apply)
         btn_layout.addWidget(self.btn_apply)
+
+        # 自适应：内容超出屏幕时启用滚动
+        screen = self.screen()
+        if screen is None:
+            from PySide6.QtGui import QGuiApplication
+            screen = QGuiApplication.primaryScreen()
+        screen_height = screen.availableGeometry().height() if screen else 1080
+        needed = content_widget.sizeHint().height() + 68
+        if needed > screen_height:
+            self.setMaximumHeight(screen_height - 50)
+            scroll = QScrollArea()
+            scroll.setWidget(content_widget)
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QFrame.NoFrame)
+            scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+            layout.addWidget(scroll, stretch=1)
+        else:
+            layout.addWidget(content_widget, stretch=1)
 
         layout.addLayout(btn_layout)
 

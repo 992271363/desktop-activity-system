@@ -78,6 +78,8 @@ class AppDetailDialog(QDialog):
         self.resize(400, 320)
         self.app_data = app_data
         self.needs_table_refresh = False
+        self.needs_monitor_refresh = False
+        self.needs_monitor_refresh = False
 
         layout = QFormLayout(self)
         layout.setLabelAlignment(Qt.AlignRight)
@@ -103,9 +105,16 @@ class AppDetailDialog(QDialog):
         line.setFrameShape(QFrame.HLine)
         layout.addRow(line)
 
-        proc_label = QLabel(app_data.executable_path)
-        proc_label.setWordWrap(True)
-        layout.addRow("进程路径:", proc_label)
+        self._tracking_row = QHBoxLayout()
+        self.proc_label = QLabel(app_data.executable_path)
+        self.proc_label.setWordWrap(True)
+        self._tracking_row.addWidget(self.proc_label, stretch=1)
+        self.btn_change_tracking = QPushButton("更换")
+        self.btn_change_tracking.setToolTip("更换追踪目标进程")
+        self.btn_change_tracking.setFixedWidth(60)
+        self.btn_change_tracking.clicked.connect(self._on_change_tracking_path)
+        self._tracking_row.addWidget(self.btn_change_tracking)
+        layout.addRow("追踪进程:", self._tracking_row)
 
         self.launch_label = QLabel()
         self.launch_label.setWordWrap(True)
@@ -210,6 +219,30 @@ class AppDetailDialog(QDialog):
             self._refresh_launch_label()
         else:
             QMessageBox.warning(self, "提示", "启动路径保存失败，请重试。")
+
+    def _on_change_tracking_path(self):
+        from db.repository import AppRepository
+        current_path = self.app_data.executable_path
+        start_dir = os.path.dirname(current_path) if os.path.isfile(current_path) else ""
+        new_path, _ = QFileDialog.getOpenFileName(
+            self, "选择追踪目标进程", start_dir,
+            "可执行文件 (*.exe *.);;所有文件 (*.*)"
+        )
+        if not new_path:
+            return
+        ok, err = AppRepository.change_tracking_path(current_path, new_path)
+        if not ok:
+            if err == "冲突":
+                QMessageBox.warning(self, "提示", "该路径已被其他应用使用，无法重复追踪。")
+            else:
+                QMessageBox.warning(self, "提示", f"操作失败：{err}")
+            return
+        self.app_data = AppRepository.get_app_by_path(new_path)
+        self.proc_label.setText(new_path)
+        self.proc_label.setToolTip(new_path)
+        self._refresh_launch_label()
+        self.needs_table_refresh = True
+        self.needs_monitor_refresh = True
 
 
 class ClosingDialog(QDialog):

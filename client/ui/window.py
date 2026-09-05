@@ -664,6 +664,8 @@ class Mywindow(QMainWindow):
             dialog.exec()
             if dialog.needs_table_refresh:
                 self._refresh_table(skip_width_hint=True)
+            if dialog.needs_monitor_refresh:
+                self._refresh_monitor_list()
 
     def _on_launch_requested(self, launch_path: str):
         try:

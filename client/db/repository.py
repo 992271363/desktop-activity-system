@@ -390,3 +390,50 @@ class AppRepository:
             return db.query(WatchedApplication).filter_by(executable_path=exe_path).first() is not None
         finally:
             db.close()
+
+    @staticmethod
+    def change_tracking_path(old_path: str, new_path: str) -> Tuple[bool, str]:
+        old_path = normalize_exe_path(old_path)
+        new_path = normalize_exe_path(new_path)
+        if old_path == new_path:
+            return True, ""
+        db = SessionLocal()
+        try:
+            app = db.query(WatchedApplication).filter_by(executable_path=old_path).first()
+            if not app:
+                return False, "??????"
+            if db.query(WatchedApplication).filter_by(executable_path=new_path).first():
+                return False, "??"
+            app.executable_path = new_path
+            db.commit()
+            _refresh_failed_queues(old_path, new_path)
+            return True, ""
+        except Exception as e:
+            db.rollback()
+            return False, str(e)
+        finally:
+            db.close()
+
+
+def _refresh_failed_queues(old_path: str, new_path: str) -> None:
+    try:
+        from core.monitor import _load_failed_queue, _save_failed_queue, _load_dead_queue, _save_dead_queue
+    except Exception:
+        return
+    old_norm = normalize_exe_path(old_path)
+    new_norm = normalize_exe_path(new_path)
+    for loader, saver in [(_load_failed_queue, _save_failed_queue), (_load_dead_queue, _save_dead_queue)]:
+        try:
+            queue = loader()
+        except Exception:
+            continue
+        changed = False
+        for item in queue:
+            if item.get("executable_path") == old_norm:
+                item["executable_path"] = new_norm
+                changed = True
+        if changed:
+            try:
+                saver(queue)
+            except Exception:
+                pass
