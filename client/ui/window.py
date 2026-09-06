@@ -28,6 +28,11 @@ from ui.picker import PickOverlay, PickButton
 from ui.theme import get_system_theme
 from util.search import make_search_keywords, matches_search_keywords
 
+def _spacer(w):
+    s = QWidget()
+    s.setFixedWidth(w)
+    return s
+
 class _NoContextToolBar(QToolBar):
     def contextMenuEvent(self, event):
         pass
@@ -181,35 +186,37 @@ class Mywindow(QMainWindow):
         toolbar.setIconSize(QSize(27, 27))
         toolbar.setToolButtonStyle(Qt.ToolButtonTextOnly)
         toolbar.setStyleSheet("""
-            QToolBar QToolButton {
+            QToolbar QToolButton {
                 min-height: 48px;
                 max-height: 48px;
                 padding: 0 10px;
                 margin: 0;
             }
 
-            QToolBar QPushButton {
+            QToolbar QPushButton {
                 min-height: 48px;
                 max-height: 48px;
                 padding: 0 12px;
                 margin: 0;
             }
 
-            QToolBar QLineEdit {
+            QToolbar QLineEdit {
                 min-height: 48px;
                 max-height: 48px;
                 padding: 0 10px;
                 margin: 0;
             }
 
-            QToolBar QLabel {
+            QToolbar QLabel {
                 min-height: 48px;
                 max-height: 48px;
                 padding: 0 8px;
                 margin: 0;
             }
         """)
-
+        toolbar.setMinimumHeight(64)
+        toolbar.layout().setAlignment(Qt.AlignVCenter)
+        
         if getattr(sys, 'frozen', False):
             self._base = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
         else:
@@ -224,10 +231,12 @@ class Mywindow(QMainWindow):
         self.btn_monitor_toggle.setToolTip("暂停/恢复全局监控")
         self.btn_monitor_toggle.setFixedHeight(48)
         toolbar.addWidget(self.btn_monitor_toggle)
+        toolbar.addWidget(_spacer(3))
 
         self.pushButton_procs = QPushButton("添加进程")
         self.pushButton_procs.setFixedHeight(48)
         toolbar.addWidget(self.pushButton_procs)
+        toolbar.addWidget(_spacer(3))
 
         self.btn_crosshair = PickButton("拾取窗口")
         self.btn_crosshair.setToolTip("按住后拖动到目标窗口上松开，自动添加监控")
@@ -239,6 +248,7 @@ class Mywindow(QMainWindow):
         self.btn_crosshair.setIconSize(QSize(27, 27))
 
         toolbar.addWidget(self.btn_crosshair)
+        #toolbar.addWidget(_spacer(3))
         toolbar.addSeparator()
 
         # ---- 分组筛选按钮 ----
@@ -252,6 +262,7 @@ class Mywindow(QMainWindow):
         self._group_btn_container.setContextMenuPolicy(Qt.CustomContextMenu)
         self._group_btn_container.customContextMenuRequested.connect(self._on_group_context_menu)
         toolbar.addWidget(self._group_btn_container)
+        toolbar.addWidget(_spacer(3))
         self._rebuild_group_buttons()
         self.group_buttons.buttonClicked.connect(self._on_group_changed)
 
@@ -264,10 +275,12 @@ class Mywindow(QMainWindow):
         self.search_edit.setToolTip("按应用名称或路径搜索，支持多个关键词")
         self.search_edit.setProperty("search", True)
         toolbar.addWidget(self.search_edit)
+        toolbar.addWidget(_spacer(3))
 
         self.btn_stats = QPushButton("统计")
         self.btn_stats.setFixedHeight(48)
         toolbar.addWidget(self.btn_stats)
+        toolbar.addWidget(_spacer(3))
 
         self.user_show = QLabel("未登录")
         self.user_show.setFixedHeight(48)
@@ -275,10 +288,12 @@ class Mywindow(QMainWindow):
         self.user_show.setObjectName("user_show")
         self.user_show.setProperty("logged", False)
         toolbar.addWidget(self.user_show)
+        toolbar.addWidget(_spacer(3))
 
         self.login_action = toolbar.addAction("登录")
         self.logout_action = toolbar.addAction("退出")
         self.logout_action.setVisible(False)
+        toolbar.addWidget(_spacer(3))
 
         self.settings_button = QPushButton()
         self.settings_button.setToolTip("设置")

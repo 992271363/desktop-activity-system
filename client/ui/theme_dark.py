@@ -416,7 +416,7 @@ QProgressBar::chunk {
 
 /* ---- 菜单栏 ---- */
 QMenuBar {
-    background-color: #252F42;
+    background-color: #0B1220;
     padding: 2px;
 }
 
@@ -432,9 +432,7 @@ QMenuBar::item:hover {
 
 /* ---- 工具栏 ---- */
 QToolbar {
-    background-color: #252F42;
-    padding: 4px 8px;
-    spacing: 6px;
+    background-color: #0B1220;
 }
 
 QToolBar::separator {
