@@ -17,6 +17,7 @@ from util.path import get_data_dir
 from ui.widgets import AlwaysDownComboBox
 from db.io import clear_all_data, clear_failed_queue
 from ui.transfer import DataTransferDialog
+from ui.wizard import FirstRunWizard
 from util.format import format_seconds_to_text
 
 
@@ -493,54 +494,10 @@ class SettingsDialog(QDialog):
             self._label_total.setText(f"累计运行：{format_seconds_to_text(total_secs)}")
 
     def _on_change_data_dir(self):
-        current = get_data_dir()
-        new_path = QFileDialog.getExistingDirectory(
-            self, "选择新的数据存储目录", current
-        )
-        if not new_path:
+        wizard = FirstRunWizard(self)
+        if wizard.exec() != QDialog.Accepted:
             return
-        new_path = os.path.normpath(os.path.abspath(new_path))
-        if new_path == current:
-            return
-
-        # 检查目标目录是否已有数据文件
-        has_existing = any(
-            os.path.exists(os.path.join(new_path, f))
-            for f in ["local_client.db", "failed_sessions.json"]
-        )
-        if has_existing:
-            reply = QMessageBox.question(
-                self,
-                "目录不为空",
-                "目标目录已存在数据文件，是否覆盖？\n\n"
-                "选择「是」将覆盖现有文件。\n"
-                "选择「否」则仅更改路径，不迁移数据。",
-                QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
-            )
-            if reply == QMessageBox.Cancel:
-                return
-            migrate = (reply == QMessageBox.Yes)
-        else:
-            migrate = QMessageBox.question(
-                self,
-                "迁移数据",
-                f"是否将现有数据迁移到新目录？\n\n"
-                f"从：{current}\n"
-                f"到：{new_path}",
-                QMessageBox.Yes | QMessageBox.No,
-            ) == QMessageBox.Yes
-
-        if migrate:
-            try:
-                os.makedirs(new_path, exist_ok=True)
-                for filename in ["local_client.db", "failed_sessions.json"]:
-                    src = os.path.join(current, filename)
-                    if os.path.exists(src):
-                        shutil.copy2(src, new_path)
-            except Exception as e:
-                QMessageBox.critical(self, "迁移失败", f"无法复制数据文件：\n{e}")
-                return
-
+        new_path = wizard.selected_path()
         Settings().set("dataDirectory", new_path)
         self.path_edit.setText(new_path)
         reply = QMessageBox.question(

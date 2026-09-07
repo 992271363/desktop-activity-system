@@ -84,15 +84,15 @@ class FirstRunWizard(QDialog):
             self._selected_path,
         )
         if path:
-            self._selected_path = path
-            self.path_edit.setText(path)
+            self._selected_path = os.path.normpath(path)
+            self.path_edit.setText(self._selected_path)
 
     def _set_root_dir(self):
-        self._selected_path = os.path.join(_program_dir(), "data")
+        self._selected_path = os.path.normpath(os.path.join(_program_dir(), "data"))
         self.path_edit.setText(self._selected_path)
 
     def _set_default_dir(self):
-        self._selected_path = _default_appdata()
+        self._selected_path = os.path.normpath(_default_appdata())
         self.path_edit.setText(self._selected_path)
 
     def _confirm(self):

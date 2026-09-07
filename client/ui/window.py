@@ -27,6 +27,7 @@ from ui.widgets import StyledSizeGrip, ChineseMenuLineEdit
 from ui.picker import PickOverlay, PickButton
 from ui.theme import get_system_theme
 from util.search import make_search_keywords, matches_search_keywords
+from version import VERSION
 
 def _spacer(w):
     s = QWidget()
@@ -419,6 +420,10 @@ class Mywindow(QMainWindow):
 
         # ---- 启动 ----
         self.statusBar().setSizeGripEnabled(False)
+        version_label = QLabel(VERSION)
+        version_label.setProperty("role", "muted")
+        version_label.setStyleSheet("font-size: 11px; color: #cbd5e1;")
+        self.statusBar().addPermanentWidget(version_label)
         self._size_grip = StyledSizeGrip(self.statusBar())
         self.statusBar().addPermanentWidget(self._size_grip)
         self._refresh_toolbar_icons()
@@ -673,7 +678,7 @@ class Mywindow(QMainWindow):
             QMessageBox.critical(self, "清除失败", msg)
 
     def _show_about(self):
-        QMessageBox.about(self, "关于 Kokoro Journey", "<h3>Kokoro Journey</h3><br><p>桌面活动统计系统</p>")
+        QMessageBox.about(self, "关于 Kokoro Journey", f"<h3>Kokoro Journey</h3><br><p>桌面活动统计系统</p><p>版本：{VERSION}</p>")
 
     def _refresh_table(self, skip_width_hint=False, preserve_sort=False):
         apps = AppRepository.get_all_apps(group_filter=self._current_group_id)
@@ -782,15 +787,20 @@ class Mywindow(QMainWindow):
 
     def _restore_main_after_pick(self):
         if getattr(self, "_pick_hid_main", False):
-            self.showNormal()
+            if getattr(self, "_pick_was_maximized", False):
+                self.showMaximized()
+            else:
+                self.showNormal()
             self.activateWindow()
             self._pick_hid_main = False
+            self._pick_was_maximized = False
 
     def start_pick_window(self):
         QApplication.instance().installEventFilter(self._right_click_blocker)
 
         self._pick_hid_main = bool(self._settings.get("hideWindowOnPick", True))
         if self._pick_hid_main:
+            self._pick_was_maximized = self.isMaximized()
             self.hide()
 
         self._pick_overlay = PickOverlay()

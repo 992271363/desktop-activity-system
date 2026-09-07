@@ -28,7 +28,7 @@ def _settings_dir() -> str:
 def _from_cmdline() -> str | None:
     for arg in sys.argv[1:]:
         if arg.startswith("--data-dir="):
-            return arg.split("=", 1)[1].strip().strip('"')
+            return os.path.normpath(arg.split("=", 1)[1].strip().strip('"'))
     return None
 
 
@@ -46,7 +46,7 @@ def _from_settings_json() -> str | None:
                 data = json.load(f)
             d = data.get("dataDirectory")
             if d and os.path.isdir(d):
-                return d
+                return os.path.normpath(d)
         except Exception:
             pass
     return None
