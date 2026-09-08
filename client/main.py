@@ -1,6 +1,7 @@
 import sys  # 提供命令行参数与退出状态码
 import os  # 提供路径拼接等系统相关功能
 import tempfile  # 获取系统临时目录，用于存放锁文件
+import shutil  # 用于复制配置文件
 
 if "__compiled__" in globals() and not getattr(sys, "frozen", False):
     sys.frozen = True
@@ -54,6 +55,7 @@ from ui.theme import apply_theme
 from util import autostart
 from util.path import is_data_dir_configured
 from ui.wizard import FirstRunWizard
+from util.state import update_state
 
 
 # ============================================================
@@ -169,6 +171,25 @@ if __name__ == "__main__":
             print("用户取消了首次配置，退出程序。")
             sys.exit(0)
         print(f"用户选择的数据目录: {wizard.selected_path()}")
+
+    # ========================================================
+    # 第三步补充：首次启动初始化用户 .env 配置
+    # ========================================================
+    from util.path import _settings_dir
+    _user_env = os.path.join(_settings_dir(), ".env")
+    if not os.path.exists(_user_env):
+        if getattr(sys, "frozen", False):
+            _app_dir = os.path.dirname(sys.executable)
+        else:
+            _app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        _example = os.path.join(_app_dir, ".env.example")
+        if os.path.exists(_example):
+            os.makedirs(_settings_dir(), exist_ok=True)
+            shutil.copy2(_example, _user_env)
+            print(f"[Config] 已初始化用户配置: {_user_env}")
+
+    # 更新卸载状态文件（确保卸载程序能读到当前数据目录）
+    update_state()
 
     # ========================================================
     # 第四步：初始化数据库

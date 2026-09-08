@@ -18,6 +18,7 @@ from ui.widgets import AlwaysDownComboBox
 from db.io import clear_all_data, clear_failed_queue
 from ui.transfer import DataTransferDialog
 from ui.wizard import FirstRunWizard
+from util.state import update_state
 from util.format import format_seconds_to_text
 
 
@@ -499,6 +500,7 @@ class SettingsDialog(QDialog):
             return
         new_path = wizard.selected_path()
         Settings().set("dataDirectory", new_path)
+        update_state(new_path)
         self.path_edit.setText(new_path)
         reply = QMessageBox.question(
             self,

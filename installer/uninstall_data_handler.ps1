@@ -1,0 +1,138 @@
+param($StateFile)
+
+# ============================================================================
+# Kokoro Journey 卸载数据处理器
+# 由 Inno Setup [UninstallRun] 调用，隐藏运行
+# 功能：读取状态 JSON → 询问用户是否保留数据 → 安全删除
+# ============================================================================
+
+$ErrorActionPreference = "SilentlyContinue"
+
+# --- 读取状态文件 ---
+if (-not (Test-Path $StateFile)) {
+    exit 0
+}
+
+try {
+    $state = Get-Content $StateFile -Raw | ConvertFrom-Json
+} catch {
+    exit 0
+}
+
+$dataDir = $state.dataDirectory
+$settingsDir = $state.settingsDirectory
+
+if (-not $dataDir) {
+    exit 0
+}
+
+# --- 弹出确认对话框 ---
+Add-Type -AssemblyName System.Windows.Forms | Out-Null
+
+$message = @(
+    "是否保留用户数据？",
+    "",
+    "数据位置：$dataDir",
+    "",
+    '选择"是"：保留数据库和设置',
+    '选择"否"：删除所有用户数据'
+) -join [Environment]::NewLine
+
+$keep = [System.Windows.Forms.MessageBox]::Show(
+    $message,
+    "Kokoro Journey 卸载",
+    [System.Windows.Forms.MessageBoxButtons]::YesNo,
+    [System.Windows.Forms.MessageBoxIcon]::Question,
+    [System.Windows.Forms.MessageBoxDefaultButton]::Button1,
+    [System.Windows.Forms.MessageBoxOptions]::TopMost
+)
+
+if ($keep -eq "Yes") {
+    exit 0
+}
+
+# --- 用户选择删除 ---
+try {
+    # 安全检查：危险目录列表
+    $systemDirs = @(
+        "$env:SystemDrive\",
+        $env:USERPROFILE,
+        $env:LOCALAPPDATA,
+        $env:APPDATA,
+        $env:PROGRAMFILES,
+        $env:"PROGRAMFILES(X86)",
+        $env:ProgramData,
+        $env:WINDIR,
+        $env:TEMP
+    )
+
+    $isDangerous = {
+        param($target)
+        if (-not $target) { return $true }
+        $targetNorm = $target.TrimEnd('\')
+        foreach ($sysDir in $script:systemDirs) {
+            if (-not $sysDir) { continue }
+            $sysNorm = $sysDir.TrimEnd('\')
+            if ($targetNorm -eq $sysNorm) { return $true }
+            if ($sysNorm.StartsWith($targetNorm + "\")) { return $true }
+        }
+        return $false
+    }
+
+    # --- 处理数据目录 ---
+    if ((Test-Path $dataDir) -and (-not (& $isDangerous $dataDir))) {
+        $kokoroPatterns = @("local_client.db", "failed_sessions.json", "local_client_*.bak")
+
+        $allItems = Get-ChildItem $dataDir -Force
+        $nonKokoroItems = @()
+
+        foreach ($item in $allItems) {
+            $isKokoro = $false
+            foreach ($pattern in $kokoroPatterns) {
+                if ($item.Name -like $pattern) {
+                    $isKokoro = $true
+                    break
+                }
+            }
+            if (-not $isKokoro) {
+                $nonKokoroItems += $item
+            }
+        }
+
+        if ($nonKokoroItems.Count -eq 0) {
+            # 全部是 Kokoro Journey 文件，删除整个目录
+            Remove-Item $dataDir -Recurse -Force
+        } else {
+            # 混合目录，只删已知 Kokoro Journey 文件
+            foreach ($pattern in $kokoroPatterns) {
+                $matches = Get-ChildItem $dataDir -Force -Filter $pattern
+                foreach ($match in $matches) {
+                    if ($match.PSIsContainer) {
+                        Remove-Item $match.FullName -Recurse -Force
+                    } else {
+                        Remove-Item $match.FullName -Force
+                    }
+                }
+            }
+            # 目录为空则删除
+            if (Test-Path $dataDir) {
+                $remaining = Get-ChildItem $dataDir -Force
+                if ($remaining.Count -eq 0) {
+                    Remove-Item $dataDir -Force
+                }
+            }
+        }
+    }
+
+    # --- 处理设置目录 ---
+    if ($settingsDir -and $settingsDir -ne $dataDir) {
+        if ((Test-Path $settingsDir) -and (-not (& $isDangerous $settingsDir))) {
+            Remove-Item $settingsDir -Recurse -Force
+        }
+    }
+} catch {
+    # 任何异常：中止删除，保留数据
+    exit 0
+}
+
+exit 0

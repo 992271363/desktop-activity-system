@@ -5,9 +5,12 @@ import requests
 from dotenv import load_dotenv
 from typing import List, Dict, Any, Optional, Tuple
 from enum import Enum
+from util.path import _settings_dir
 
 if getattr(sys, "frozen", False):
-    _env_path = Path(sys.executable).resolve().parent / ".env"
+    _user_env = Path(_settings_dir()) / ".env"
+    _install_env = Path(sys.executable).resolve().parent / ".env"
+    _env_path = _user_env if _user_env.exists() else _install_env
 else:
     _env_path = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(_env_path)

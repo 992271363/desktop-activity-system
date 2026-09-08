@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 )
 from util.path import _default_appdata, _program_dir
 from util.config import Settings
+from util.state import update_state
 
 
 class FirstRunWizard(QDialog):
@@ -113,6 +114,7 @@ class FirstRunWizard(QDialog):
             return
 
         Settings().set("dataDirectory", path)
+        update_state(path)
         self.accept()
 
     def selected_path(self) -> str:
