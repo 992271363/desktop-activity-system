@@ -57,5 +57,66 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: nowait postinstall skipifsilent
 
-[UninstallRun]
-Filename: powershell.exe; Parameters: "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File ""{app}\uninstall_data_handler.ps1"" ""{localappdata}\Kokoro Journey\uninstall_state.json""; Flags: runasoriginaluser waituntilterminated
+[Code]
+var
+  DataCheckbox: TCheckBox;
+
+procedure InitializeUninstallProgressForm;
+begin
+  if DataCheckbox <> nil then
+    Exit;
+  DataCheckbox := TCheckBox.Create(UninstallProgressForm);
+  DataCheckbox.Parent := UninstallProgressForm;
+  DataCheckbox.Caption := '保留用户数据';
+  DataCheckbox.Checked := True;
+  DataCheckbox.Left := 20;
+  DataCheckbox.Top := 80;
+  DataCheckbox.Width := 250;
+  DataCheckbox.Height := 20;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  UninstallForm: TUninstallForm;
+  ResultCode: Integer;
+  ScriptPath, StateFilePath, PowerShellPath, Params: String;
+  ExecSuccess: Boolean;
+begin
+  if CurUninstallStep <> usUninstall then
+    Exit;
+
+  UninstallForm := GetUninstallProgressForm;
+
+  if (DataCheckbox = nil) or DataCheckbox.Checked then
+  begin
+    UninstallForm.PageNameLabel.Caption := '用户数据已保留。';
+    UninstallForm.Update;
+    Exit;
+  end;
+
+  StateFilePath := ExpandConstant('{localappdata}\Kokoro Journey\uninstall_state.json');
+  ScriptPath := ExpandConstant('{app}\uninstall_data_handler.ps1');
+
+  if not (FileExists(StateFilePath) and FileExists(ScriptPath)) then
+  begin
+    UninstallForm.PageNameLabel.Caption := '未找到用户数据配置，无需清理。';
+    UninstallForm.Update;
+    Exit;
+  end;
+
+  UninstallForm.PageNameLabel.Caption := '正在处理用户数据...';
+  UninstallForm.Update;
+
+  PowerShellPath := ExpandConstant('{sys}\powershell.exe');
+  Params := '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' +
+            ScriptPath + '" "' + StateFilePath + '" -DeleteData';
+  ResultCode := -1;
+  ExecSuccess := Exec(PowerShellPath, Params, '', SW_SHOWNORMAL,
+                      ewWaitUntilTerminated, ResultCode);
+
+  if ExecSuccess and (ResultCode = 0) then
+    UninstallForm.PageNameLabel.Caption := '用户数据处理完成。'
+  else
+    UninstallForm.PageNameLabel.Caption := '部分用户数据未能删除，请手动处理。';
+  UninstallForm.Update;
+end;

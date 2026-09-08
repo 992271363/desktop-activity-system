@@ -1,12 +1,20 @@
-param($StateFile)
+param(
+    [string]$StateFile,
+    [bool]$DeleteData = $false
+)
 
 # ============================================================================
 # Kokoro Journey 卸载数据处理器
-# 由 Inno Setup [UninstallRun] 调用，隐藏运行
-# 功能：读取状态 JSON → 询问用户是否保留数据 → 安全删除
+# 由 Inno Setup [Code] 调用，隐藏运行
+# 功能：接收 -DeleteData 参数 → 安全删除用户数据
 # ============================================================================
 
 $ErrorActionPreference = "Stop"
+
+# 未请求删除：直接退出
+if (-not $DeleteData) {
+    exit 0
+}
 
 # --- 读取状态文件 ---
 if (-not (Test-Path $StateFile)) {
@@ -26,32 +34,9 @@ if (-not $dataDir) {
     exit 0
 }
 
-# --- 弹出确认对话框 ---
-Add-Type -AssemblyName System.Windows.Forms | Out-Null
+# --- 用户选择删除（Inno Setup 复选框已确认） ---
+$deletionIssues = $false
 
-$message = @(
-    "是否保留用户数据？",
-    "",
-    "数据位置：$dataDir",
-    "",
-    '选择"是"：保留数据库和设置',
-    '选择"否"：删除所有用户数据'
-) -join [Environment]::NewLine
-
-$keep = [System.Windows.Forms.MessageBox]::Show(
-    $message,
-    "Kokoro Journey 卸载",
-    [System.Windows.Forms.MessageBoxButtons]::YesNo,
-    [System.Windows.Forms.MessageBoxIcon]::Question,
-    [System.Windows.Forms.MessageBoxDefaultButton]::Button1,
-    [System.Windows.Forms.MessageBoxOptions]::TopMost
-)
-
-if ($keep -eq "Yes") {
-    exit 0
-}
-
-# --- 用户选择删除 ---
 try {
     # 安全检查：危险目录列表
     $systemDirs = @()
@@ -78,6 +63,7 @@ try {
             $sysNorm = $sysDir.TrimEnd('\')
             if ($targetNorm -eq $sysNorm) { return $true }
             if ($sysNorm.StartsWith($targetNorm + "\")) { return $true }
+            if ($targetNorm.StartsWith($sysNorm + "\")) { return $true }
         }
         return $false
     }
@@ -126,6 +112,9 @@ try {
             }
         }
     }
+    elseif (Test-Path $dataDir) {
+        $deletionIssues = $true
+    }
 
     # --- 处理设置目录 ---
     if ($settingsDir -and $settingsDir -ne $dataDir) {
@@ -165,10 +154,17 @@ try {
                 }
             }
         }
+        elseif (Test-Path $settingsDir) {
+            $deletionIssues = $true
+        }
     }
 } catch {
     # 任何异常：中止删除，保留数据
-    exit 0
+    exit 1
+}
+
+if ($deletionIssues) {
+    exit 1
 }
 
 exit 0
