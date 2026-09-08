@@ -6,7 +6,7 @@ param($StateFile)
 # 功能：读取状态 JSON → 询问用户是否保留数据 → 安全删除
 # ============================================================================
 
-$ErrorActionPreference = "SilentlyContinue"
+$ErrorActionPreference = "Stop"
 
 # --- 读取状态文件 ---
 if (-not (Test-Path $StateFile)) {
@@ -54,8 +54,11 @@ if ($keep -eq "Yes") {
 # --- 用户选择删除 ---
 try {
     # 安全检查：危险目录列表
-    $systemDirs = @(
-        "$env:SystemDrive\",
+    $systemDirs = @()
+    foreach ($drive in (Get-PSDrive -PSProvider FileSystem)) {
+        $systemDirs += "$($drive.Root)"
+    }
+    $systemDirs += @(
         $env:USERPROFILE,
         $env:LOCALAPPDATA,
         $env:APPDATA,
@@ -127,7 +130,40 @@ try {
     # --- 处理设置目录 ---
     if ($settingsDir -and $settingsDir -ne $dataDir) {
         if ((Test-Path $settingsDir) -and (-not (& $isDangerous $settingsDir))) {
-            Remove-Item $settingsDir -Recurse -Force
+            $settingsPatterns = @(".env", "settings.json", "uninstall_state.json")
+
+            $allSettingsItems = Get-ChildItem $settingsDir -Force
+            $nonKokoroSettingsItems = @()
+
+            foreach ($item in $allSettingsItems) {
+                $isKokoro = $false
+                foreach ($pattern in $settingsPatterns) {
+                    if ($item.Name -like $pattern) {
+                        $isKokoro = $true
+                        break
+                    }
+                }
+                if (-not $isKokoro) {
+                    $nonKokoroSettingsItems += $item
+                }
+            }
+
+            if ($nonKokoroSettingsItems.Count -eq 0) {
+                Remove-Item $settingsDir -Recurse -Force
+            } else {
+                foreach ($pattern in $settingsPatterns) {
+                    $settingsMatches = Get-ChildItem $settingsDir -Force -Filter $pattern
+                    foreach ($match in $settingsMatches) {
+                        Remove-Item $match.FullName -Force
+                    }
+                }
+                if (Test-Path $settingsDir) {
+                    $remaining = Get-ChildItem $settingsDir -Force
+                    if ($remaining.Count -eq 0) {
+                        Remove-Item $settingsDir -Force
+                    }
+                }
+            }
         }
     }
 } catch {
