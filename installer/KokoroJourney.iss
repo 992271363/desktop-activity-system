@@ -42,7 +42,6 @@ Name: "autostart"; Description: "开机自动启动"; GroupDescription: "额外�
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "..\client\.env.example"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesnotexist
 Source: "uninstall_data_handler.ps1"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]

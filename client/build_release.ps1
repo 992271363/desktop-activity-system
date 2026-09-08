@@ -34,6 +34,7 @@ if (-not $SkipBuild) {
             --output-filename=kokoro-journey.exe `
             --output-dir=$Stage `
             --include-data-dir=icons=icons `
+            --include-data-file=.env.example=.env.example `
             main.py
         if ($LASTEXITCODE -ne 0) { throw "主程序编译失败" }
     } finally {
@@ -59,9 +60,7 @@ Write-Host "== [3/3] 组装发布目录 $DistDir ==" -ForegroundColor Cyan
 New-Item -ItemType Directory -Force $DistDir | Out-Null
 Copy-Item (Join-Path $Stage "main.dist\*") $DistDir -Recurse -Force
 Copy-Item (Join-Path $Stage "log_console.dist\log-console.exe") $DistDir -Force
-if (Test-Path (Join-Path $ProjectRoot ".env")) {
-    Copy-Item (Join-Path $ProjectRoot ".env") $DistDir -Force
-}
+
 
 Write-Host "打包完成: $DistDir" -ForegroundColor Green
 Write-Host "  kokoro-journey.exe  主程序（无黑窗，开机自启指向它）"

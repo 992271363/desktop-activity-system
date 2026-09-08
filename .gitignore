@@ -251,3 +251,6 @@ client/settings.json
 
 #uninstall state
 uninstall_state.json
+
+.opencode/
+installer_output/
