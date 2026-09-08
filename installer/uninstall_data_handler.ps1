@@ -60,13 +60,12 @@ try {
             if ($targetNorm -eq $drive.Root.TrimEnd('\')) { return $true }
         }
 
-        # 系统目录：精确 / 父级 / 子级
+        # 系统目录：精确 / 父级（不含子级，避免误判用户数据目录）
         foreach ($sysDir in $script:systemDirs) {
             if (-not $sysDir) { continue }
             $sysNorm = $sysDir.TrimEnd('\')
             if ($targetNorm -eq $sysNorm) { return $true }
             if ($sysNorm.StartsWith($targetNorm + "\")) { return $true }
-            if ($targetNorm.StartsWith($sysNorm + "\")) { return $true }
         }
 
         return $false
@@ -76,43 +75,20 @@ try {
     if ((Test-Path $dataDir) -and (-not (& $isDangerous $dataDir))) {
         $kokoroPatterns = @("local_client.db", "failed_sessions.json", "local_client_*.bak")
 
-        $allItems = Get-ChildItem $dataDir -Force
-        $nonKokoroItems = @()
-
-        foreach ($item in $allItems) {
-            $isKokoro = $false
-            foreach ($pattern in $kokoroPatterns) {
-                if ($item.Name -like $pattern) {
-                    $isKokoro = $true
-                    break
+        foreach ($pattern in $kokoroPatterns) {
+            $kokoroMatches = Get-ChildItem $dataDir -Force -Filter $pattern
+            foreach ($match in $kokoroMatches) {
+                if ($match.PSIsContainer) {
+                    Remove-Item $match.FullName -Recurse -Force
+                } else {
+                    Remove-Item $match.FullName -Force
                 }
-            }
-            if (-not $isKokoro) {
-                $nonKokoroItems += $item
             }
         }
-
-        if ($nonKokoroItems.Count -eq 0) {
-            # 全部是 Kokoro Journey 文件，删除整个目录
-            Remove-Item $dataDir -Recurse -Force
-        } else {
-            # 混合目录，只删已知 Kokoro Journey 文件
-            foreach ($pattern in $kokoroPatterns) {
-                $kokoroMatches = Get-ChildItem $dataDir -Force -Filter $pattern
-                foreach ($match in $kokoroMatches) {
-                    if ($match.PSIsContainer) {
-                        Remove-Item $match.FullName -Recurse -Force
-                    } else {
-                        Remove-Item $match.FullName -Force
-                    }
-                }
-            }
-            # 目录为空则删除
-            if (Test-Path $dataDir) {
-                $remaining = Get-ChildItem $dataDir -Force
-                if ($remaining.Count -eq 0) {
-                    Remove-Item $dataDir -Force
-                }
+        if (Test-Path $dataDir) {
+            $remaining = Get-ChildItem $dataDir -Force
+            if ($remaining.Count -eq 0) {
+                Remove-Item $dataDir -Force
             }
         }
     }
@@ -125,36 +101,16 @@ try {
         if ((Test-Path $settingsDir) -and (-not (& $isDangerous $settingsDir))) {
             $settingsPatterns = @(".env", "settings.json", "uninstall_state.json")
 
-            $allSettingsItems = Get-ChildItem $settingsDir -Force
-            $nonKokoroSettingsItems = @()
-
-            foreach ($item in $allSettingsItems) {
-                $isKokoro = $false
-                foreach ($pattern in $settingsPatterns) {
-                    if ($item.Name -like $pattern) {
-                        $isKokoro = $true
-                        break
-                    }
-                }
-                if (-not $isKokoro) {
-                    $nonKokoroSettingsItems += $item
+            foreach ($pattern in $settingsPatterns) {
+                $settingsMatches = Get-ChildItem $settingsDir -Force -Filter $pattern
+                foreach ($match in $settingsMatches) {
+                    Remove-Item $match.FullName -Force
                 }
             }
-
-            if ($nonKokoroSettingsItems.Count -eq 0) {
-                Remove-Item $settingsDir -Recurse -Force
-            } else {
-                foreach ($pattern in $settingsPatterns) {
-                    $settingsMatches = Get-ChildItem $settingsDir -Force -Filter $pattern
-                    foreach ($match in $settingsMatches) {
-                        Remove-Item $match.FullName -Force
-                    }
-                }
-                if (Test-Path $settingsDir) {
-                    $remaining = Get-ChildItem $settingsDir -Force
-                    if ($remaining.Count -eq 0) {
-                        Remove-Item $settingsDir -Force
-                    }
+            if (Test-Path $settingsDir) {
+                $remaining = Get-ChildItem $settingsDir -Force
+                if ($remaining.Count -eq 0) {
+                    Remove-Item $settingsDir -Force
                 }
             }
         }
