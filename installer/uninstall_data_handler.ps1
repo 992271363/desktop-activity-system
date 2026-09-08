@@ -60,7 +60,7 @@ try {
         $env:LOCALAPPDATA,
         $env:APPDATA,
         $env:PROGRAMFILES,
-        $env:"PROGRAMFILES(X86)",
+        [Environment]::GetEnvironmentVariable("PROGRAMFILES(X86)"),
         $env:ProgramData,
         $env:WINDIR,
         $env:TEMP
@@ -105,8 +105,8 @@ try {
         } else {
             # 混合目录，只删已知 Kokoro Journey 文件
             foreach ($pattern in $kokoroPatterns) {
-                $matches = Get-ChildItem $dataDir -Force -Filter $pattern
-                foreach ($match in $matches) {
+                $kokoroMatches = Get-ChildItem $dataDir -Force -Filter $pattern
+                foreach ($match in $kokoroMatches) {
                     if ($match.PSIsContainer) {
                         Remove-Item $match.FullName -Recurse -Force
                     } else {
