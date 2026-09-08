@@ -77,7 +77,7 @@ end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  UninstallForm: TUninstallForm;
+  UninstallForm: TUninstallProgressForm;
   ResultCode: Integer;
   ScriptPath, StateFilePath, PowerShellPath, Params: String;
   ExecSuccess: Boolean;

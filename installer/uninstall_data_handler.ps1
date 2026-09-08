@@ -18,20 +18,20 @@ if (-not $DeleteData) {
 
 # --- 读取状态文件 ---
 if (-not (Test-Path $StateFile)) {
-    exit 0
+    exit 1
 }
 
 try {
     $state = Get-Content $StateFile -Raw | ConvertFrom-Json
 } catch {
-    exit 0
+    exit 1
 }
 
 $dataDir = $state.dataDirectory
 $settingsDir = $state.settingsDirectory
 
 if (-not $dataDir) {
-    exit 0
+    exit 1
 }
 
 # --- 用户选择删除（Inno Setup 复选框已确认） ---
@@ -39,11 +39,7 @@ $deletionIssues = $false
 
 try {
     # 安全检查：危险目录列表
-    $systemDirs = @()
-    foreach ($drive in (Get-PSDrive -PSProvider FileSystem)) {
-        $systemDirs += "$($drive.Root)"
-    }
-    $systemDirs += @(
+    $systemDirs = @(
         $env:USERPROFILE,
         $env:LOCALAPPDATA,
         $env:APPDATA,
@@ -58,6 +54,13 @@ try {
         param($target)
         if (-not $target) { return $true }
         $targetNorm = $target.TrimEnd('\')
+
+        # 盘根目录：仅精确匹配
+        foreach ($drive in (Get-PSDrive -PSProvider FileSystem)) {
+            if ($targetNorm -eq $drive.Root.TrimEnd('\')) { return $true }
+        }
+
+        # 系统目录：精确 / 父级 / 子级
         foreach ($sysDir in $script:systemDirs) {
             if (-not $sysDir) { continue }
             $sysNorm = $sysDir.TrimEnd('\')
@@ -65,6 +68,7 @@ try {
             if ($sysNorm.StartsWith($targetNorm + "\")) { return $true }
             if ($targetNorm.StartsWith($sysNorm + "\")) { return $true }
         }
+
         return $false
     }
 
