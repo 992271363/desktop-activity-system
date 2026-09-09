@@ -7,7 +7,7 @@
 
 #define MyAppName "Kokoro Journey"
 #ifndef MyAppVersion
-#define MyAppVersion "v2026.9.7-1.0.0"
+#define MyAppVersion "v2026.9.9-1.0.0"
 #endif
 #define MyAppPublisher "Kokoro Journey"
 #define MyAppExeName "kokoro-journey.exe"
@@ -58,20 +58,105 @@ Filename: "{app}\{#MyAppExeName}"; Description: "启动 {#MyAppName}"; Flags: no
 
 [Code]
 var
+  ShouldDeleteData: Boolean;
+  UninstallConfigForm: TForm;
   DataCheckbox: TCheckBox;
+  UninstallResult: Integer;
 
-procedure InitializeUninstallProgressForm;
+function GetDataDirFromStateFile: String;
 begin
-  if DataCheckbox <> nil then
-    Exit;
-  DataCheckbox := TCheckBox.Create(UninstallProgressForm);
-  DataCheckbox.Parent := UninstallProgressForm;
-  DataCheckbox.Caption := '保留用户数据';
+  Result := ExpandConstant('{localappdata}\Kokoro Journey');
+end;
+
+procedure NextBtnClick(Sender: TObject);
+begin
+  ShouldDeleteData := not DataCheckbox.Checked;
+  UninstallResult := mrOK;
+  UninstallConfigForm.Close;
+end;
+
+procedure CancelBtnClick(Sender: TObject);
+begin
+  UninstallResult := mrCancel;
+  UninstallConfigForm.Close;
+end;
+
+function InitializeUninstall: Boolean;
+var
+  TitleLabel, DescLabel, DataLabel, WarnLabel: TLabel;
+  NextBtn, CancelBtn: TButton;
+  DataDir: String;
+begin
+  ShouldDeleteData := False;
+
+  DataDir := GetDataDirFromStateFile;
+  if DataDir = '' then
+    DataDir := ExpandConstant('{localappdata}\Kokoro Journey');
+
+  UninstallConfigForm := TForm.Create(nil);
+  UninstallConfigForm.BorderStyle := bsDialog;
+  UninstallConfigForm.Caption := '卸载设置';
+  UninstallConfigForm.Width := 480;
+  UninstallConfigForm.Height := 310;
+  UninstallConfigForm.Position := poScreenCenter;
+
+  TitleLabel := TLabel.Create(UninstallConfigForm);
+  TitleLabel.Parent := UninstallConfigForm;
+  TitleLabel.Caption := '卸载 Kokoro Journey';
+  TitleLabel.Font.Size := 16;
+  TitleLabel.Font.Style := [fsBold];
+  TitleLabel.Left := 30;
+  TitleLabel.Top := 25;
+
+  DescLabel := TLabel.Create(UninstallConfigForm);
+  DescLabel.Parent := UninstallConfigForm;
+  DescLabel.Caption := '请选择数据处理方式：';
+  DescLabel.Left := 30;
+  DescLabel.Top := 65;
+
+  DataLabel := TLabel.Create(UninstallConfigForm);
+  DataLabel.Parent := UninstallConfigForm;
+  DataLabel.Caption := '用户数据位置：' + DataDir;
+  DataLabel.Left := 30;
+  DataLabel.Top := 95;
+
+  DataCheckbox := TCheckBox.Create(UninstallConfigForm);
+  DataCheckbox.Parent := UninstallConfigForm;
+  DataCheckbox.Caption := '保留用户数据（数据库、设置、历史记录等）';
   DataCheckbox.Checked := True;
-  DataCheckbox.Left := 20;
-  DataCheckbox.Top := 80;
-  DataCheckbox.Width := 250;
-  DataCheckbox.Height := 20;
+  DataCheckbox.Left := 40;
+  DataCheckbox.Top := 125;
+  DataCheckbox.Width := 400;
+
+  WarnLabel := TLabel.Create(UninstallConfigForm);
+  WarnLabel.Parent := UninstallConfigForm;
+  WarnLabel.Caption := '取消勾选后，用户数据将被永久删除，无法恢复。';
+  WarnLabel.Font.Style := [fsItalic];
+  WarnLabel.Font.Color := clMaroon;
+  WarnLabel.Left := 60;
+  WarnLabel.Top := 155;
+
+  NextBtn := TButton.Create(UninstallConfigForm);
+  NextBtn.Parent := UninstallConfigForm;
+  NextBtn.Caption := '下一步';
+  NextBtn.Default := True;
+  NextBtn.Left := 180;
+  NextBtn.Top := 210;
+  NextBtn.Width := 85;
+  NextBtn.OnClick := @NextBtnClick;
+
+  CancelBtn := TButton.Create(UninstallConfigForm);
+  CancelBtn.Parent := UninstallConfigForm;
+  CancelBtn.Caption := '取消';
+  CancelBtn.Left := 275;
+  CancelBtn.Top := 210;
+  CancelBtn.Width := 85;
+  CancelBtn.OnClick := @CancelBtnClick;
+
+  UninstallResult := mrCancel;
+  UninstallConfigForm.ShowModal;
+  Result := UninstallResult = mrOK;
+  UninstallConfigForm.Free;
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
@@ -86,36 +171,40 @@ begin
 
   UninstallForm := GetUninstallProgressForm;
 
-  if (DataCheckbox = nil) or DataCheckbox.Checked then
+  if not ShouldDeleteData then
   begin
+    // 保留用户数据
     UninstallForm.PageNameLabel.Caption := '用户数据已保留。';
     UninstallForm.Update;
     Exit;
-  end;
-
-  StateFilePath := ExpandConstant('{localappdata}\Kokoro Journey\uninstall_state.json');
-  ScriptPath := ExpandConstant('{app}\uninstall_data_handler.ps1');
-
-  if not (FileExists(StateFilePath) and FileExists(ScriptPath)) then
-  begin
-    UninstallForm.PageNameLabel.Caption := '未找到用户数据配置，无需清理。';
-    UninstallForm.Update;
-    Exit;
-  end;
-
-  UninstallForm.PageNameLabel.Caption := '正在处理用户数据...';
-  UninstallForm.Update;
-
-  PowerShellPath := ExpandConstant('{sys}\powershell.exe');
-  Params := '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' +
-            ScriptPath + '" "' + StateFilePath + '" -DeleteData';
-  ResultCode := -1;
-  ExecSuccess := Exec(PowerShellPath, Params, '', SW_SHOWNORMAL,
-                      ewWaitUntilTerminated, ResultCode);
-
-  if ExecSuccess and (ResultCode = 0) then
-    UninstallForm.PageNameLabel.Caption := '用户数据处理完成。'
+  end
   else
-    UninstallForm.PageNameLabel.Caption := '部分用户数据未能删除，请手动处理。';
-  UninstallForm.Update;
+  begin
+    // 删除用户数据
+    StateFilePath := ExpandConstant('{localappdata}\Kokoro Journey\uninstall_state.json');
+    ScriptPath := ExpandConstant('{app}\uninstall_data_handler.ps1');
+
+    if not (FileExists(StateFilePath) and FileExists(ScriptPath)) then
+    begin
+      UninstallForm.PageNameLabel.Caption := '未找到用户数据配置，无需清理。';
+      UninstallForm.Update;
+      Exit;
+    end;
+
+    UninstallForm.PageNameLabel.Caption := '正在处理用户数据...';
+    UninstallForm.Update;
+
+    PowerShellPath := ExpandConstant('{sys}\powershell.exe');
+    Params := '-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' +
+              ScriptPath + '" "' + StateFilePath + '" -DeleteData';
+    ResultCode := -1;
+    ExecSuccess := Exec(PowerShellPath, Params, '', SW_SHOWNORMAL,
+                        ewWaitUntilTerminated, ResultCode);
+
+    if ExecSuccess and (ResultCode = 0) then
+      UninstallForm.PageNameLabel.Caption := '用户数据处理完成。'
+    else
+      UninstallForm.PageNameLabel.Caption := '部分用户数据未能删除，请手动处理。';
+    UninstallForm.Update;
+  end;
 end;
