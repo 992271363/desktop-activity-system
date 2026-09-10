@@ -172,7 +172,9 @@ class Mywindow(QMainWindow):
 
         # ---- UI 初始化 ----
         self.setWindowTitle("Kokoro Journey")
-        self.resize(1100, 619)
+        self.resize(1200, 675)
+        screen = self.screen().availableGeometry()
+        self.setMinimumSize(int(screen.width() * 0.5), int(screen.height() * 0.5))
 
         central = QWidget(self)
         self.setCentralWidget(central)
@@ -270,7 +272,7 @@ class Mywindow(QMainWindow):
         self.search_edit = ToolbarSearchEdit()
         self.search_edit.setPlaceholderText("搜索名称...")
         self.search_edit.setClearButtonEnabled(True)
-        self.search_edit.setMinimumWidth(330)
+        self.search_edit.setMinimumWidth(80)
         self.search_edit.setFixedHeight(48)
         self.search_edit.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.search_edit.setToolTip("按应用名称或路径搜索，支持多个关键词")
@@ -718,7 +720,7 @@ class Mywindow(QMainWindow):
         margins = self._table_container.layout().contentsMargins()
         extra = margins.left() + margins.right()
         new_width = table_content_width + extra
-        new_height = int(new_width * 9 / 16)
+        new_height = int(new_width * 16 / 9)
         screen = self.screen().availableGeometry()
         new_width = min(new_width, screen.width())
         new_height = min(new_height, screen.height())
